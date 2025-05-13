@@ -2,14 +2,13 @@ mod network;
 mod event_loop;
 mod dag;
 mod api;
+mod zk;
 
-use std::{error::Error, io};
+use crate::api::Api;
 use std::io::Write;
-use libp2p::{Multiaddr, PeerId};
-use libp2p::multiaddr::Protocol;
+use std::{error::Error, io};
 use tokio;
 use tracing_subscriber::EnvFilter;
-use crate::api::Api;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

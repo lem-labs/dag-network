@@ -1,8 +1,7 @@
-use std::error::Error;
-use libp2p::{Multiaddr, PeerId};
-use tokio::sync::{mpsc, oneshot};
-use crate::dag::{Transaction, TxHash};
+use crate::dag::{TransactionWithId, TxHash};
+use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc, oneshot};
 use warp::{Filter, Rejection, Reply};
 
 #[derive(Deserialize)]
@@ -42,7 +41,7 @@ pub enum ApiEvent {
     Bootstrap { bootstrap_addr: String, respond_to: oneshot::Sender<Result<(), String>> },
     GetAccount { peer_id: String, respond_to: oneshot::Sender<Vec<u8>> },
     GetContract { contract_address: TxHash, respond_to: oneshot::Sender<Vec<u8>> },
-    GetTx { tx_id: TxHash, respond_to: oneshot::Sender<Transaction> },
+    GetTx { tx_id: TxHash, respond_to: oneshot::Sender<TransactionWithId> },
     GetParents { tx_id: TxHash, respond_to: oneshot::Sender<Vec<TxHash>> },
     GetChildren { tx_id: TxHash,  respond_to: oneshot::Sender<Vec<TxHash>> },
     GetSyncStatus { respond_to: oneshot::Sender<String> },

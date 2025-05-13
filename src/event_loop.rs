@@ -5,7 +5,7 @@ use libp2p::kad::BootstrapOk;
 use libp2p::multiaddr::Protocol;
 use libp2p::swarm::SwarmEvent;
 use tokio::sync::mpsc::Receiver;
-use crate::dag::{DagLedger, Transaction, TxHash};
+use crate::dag::{DagLedger, TransactionWithId, TxHash};
 use crate::network::{LemuriaBehaviour, LemuriaBehaviourEvent};
 use crate::api::ApiEvent;
 
@@ -274,13 +274,17 @@ impl EventLoop {
         println!("  from: {}", propagation_source);
         println!("  message_id: {}", message_id);
 
-        if let Ok(tx) = serde_json::from_slice::<Transaction>(&message.data) {
+        if let Ok(tx) = serde_json::from_slice::<TransactionWithId>(&message.data) {
 
-            if self.dag.add_tx(tx.clone()) {
-                println!("Transaction added to dag: {:?}", tx.id);
-                println!("DAG Current State: {:?}", self.dag.state_tree);
-            } else {
-                println!("Duplicate transaction: {:?}", tx.id);
+            match self.dag.add_tx(tx.clone()) {
+                Ok(()) => {
+                    println!("Transaction added to dag: {:?}", tx.id);
+                    println!("DAG Current State: {:?}", self.dag.state_tree);
+                }
+                Err(e) => {
+                    eprintln!("Error adding transaction: {:?}", e);
+
+                }
             }
         } else {
             println!("  message: {:?}", std::str::from_utf8(&message.data).unwrap());

@@ -1,10 +1,9 @@
 use crate::api::ApiEvent;
 use crate::event_loop::EventLoop;
-use libp2p::{gossipsub, identify, identity, identity::Keypair, kad, noise, ping, swarm::NetworkBehaviour, tcp, yamux, Multiaddr, PeerId, Swarm, SwarmBuilder};
+use libp2p::{gossipsub, identify, identity, identity::Keypair, kad, noise, ping, swarm::NetworkBehaviour, tcp, yamux, Multiaddr, Swarm, SwarmBuilder};
 use local_ip_address::local_ip;
 use std::time::Duration;
 use std::{error::Error, hash::{DefaultHasher, Hash, Hasher}};
-use libp2p::multiaddr::Protocol;
 use tokio::sync::mpsc;
 
 #[derive(NetworkBehaviour)]
