@@ -1,0 +1,16 @@
+[package]
+name = "dag-network"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.45.0", features = ["full"] }
+libp2p = { version = "0.55", features = [ "tokio", "gossipsub", "identify", "mdns", "noise", "macros", "tcp", "ping", "yamux", "quic", "kad", "dns", "rsa", "request-response", "cbor", "kad"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+futures = "0.3"
+local-ip-address = "0.6.5"
+wasmtime = "32.0.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+warp = "0.3.7"
+sha2 = "0.11.0-pre.5"
