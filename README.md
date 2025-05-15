@@ -1,17 +1,4 @@
-# zk-dag
-### Zero Knowledge Directed Acyclic Graph
-A DAG in which parents are verified and contracts are executed inside a zero knowledge circuit. 
-
-Traditional DAG architectures such as Iota and Avalanche rely on verifier nodes to re-execute their transactions to verify that
-they led to the given state change. In our model, instead verifier nodes will only need to verify a zero knowledge proof. This proof
-will verify that the transaction correctly verified its parents and that its contract execution led to the given state change. 
-
-This allows you to verify the entire ancestry of a transaction via one single proof, via zk recursion - if you proved your parents 
-are valid, that means their parents are valid, which means their parents are valid, and so on.
-
-This also allows for the verifying nodes to not have to know what contract function was called. Since all that is needed to verify
-execution is the zk proof, we can avoid including the name of the contract, function, and args in the transaction. State updates will 
-still be publicly available, though.
+# dag-network
 
 ### To Run:
 - compile lemutia-contracts:
