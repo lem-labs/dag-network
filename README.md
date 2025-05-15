@@ -9,7 +9,7 @@ This project is a demo DAG Network. It is meant to be used as a base for further
   - `rustup target add wasm32-unknown-unknown;`
   - `cargo build --release --target wasm32-unknown-unknown` 
 
-- `cargo run` multiple instances
+- from project root, `cargo run` multiple node instances
 - enter some key seed and ports for each instance
 - run `call_api.sh`
   - this will be our nodes' controller
