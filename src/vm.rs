@@ -3,11 +3,11 @@ use libp2p::PeerId;
 use crate::dag::{StateNode, Transaction, TxHash, ZkProof};
 
 #[derive(Debug, Clone)]
-pub struct Zkvm {
+pub struct Vm {
 
 }
 
-impl Zkvm {
+impl Vm {
 
     pub fn new() -> Self {
         Self {}

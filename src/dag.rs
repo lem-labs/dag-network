@@ -1,5 +1,5 @@
-use crate::zk;
-use crate::zk::Zkvm;
+use crate::vm;
+use crate::vm::Vm;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
@@ -115,7 +115,7 @@ pub struct Dag {
     pub transactions: HashMap<TxHash, Transaction>,
     pub tips_children: HashMap<TxHash, HashSet<TxHash>>,
     pub state_tree: HashMap<TxHash, StateNode>,
-    pub zkvm: zk::Zkvm,
+    pub zkvm: vm::Vm,
     sender: tokio::sync::mpsc::Sender<DagEvent>
 }
 
@@ -126,7 +126,7 @@ impl Dag {
             transactions: HashMap::new(),
             tips_children: HashMap::new(),
             state_tree: HashMap::new(),
-            zkvm: Zkvm::new(),
+            zkvm: Vm::new(),
             sender,
         };
 
