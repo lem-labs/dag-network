@@ -16,13 +16,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    // let keypair_seed = prompt_input("Enter keypair seed");
-    let keypair_seed = "";
+    let secret_key_seed = prompt_input("Enter secret key seed: ");
     let p2p_port = prompt_input("Enter p2p port: ");
     let api_port = prompt_input("Enter api port: ");
 
-    let (mut event_loop, api_sender) = network::new(keypair_seed.parse().unwrap(), p2p_port).await?;
-    let mut api = Api::new(api_sender);
+    let (mut event_loop, api_sender) = network::new(&*secret_key_seed, p2p_port).await?;
+    let api = Api::new(api_sender);
 
     let event_loop_task = tokio::spawn(async move {
         event_loop.run().await;
@@ -32,8 +31,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         api.run(api_port.parse().unwrap()).await;
     });
 
-    event_loop_task.await?;
+
     api_task.await?;
+
+    event_loop_task.await?;
 
     Ok(())
 

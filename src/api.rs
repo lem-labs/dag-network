@@ -1,5 +1,6 @@
+use std::collections::{HashMap, HashSet};
 use crate::dag::{TransactionWithId, TxHash};
-use libp2p::Multiaddr;
+use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use warp::{Filter, Rejection, Reply};
@@ -8,43 +9,55 @@ use warp::{Filter, Rejection, Reply};
 struct SendTxInput {
     contract: String,
     function: String,
-    args: Vec<Vec<u8>>,
+    args: HashMap<String, Vec<u8>>,
 }
 
 #[derive(Deserialize)]
 struct DialPeerInput {
     peer_id: String,
+    multiaddr: String,
 }
 
 #[derive(Deserialize)]
 struct TxIdInput {
-    tx_id: TxHash,
+    tx_id: String,
+}
+#[derive(Deserialize)]
+struct TxIdsInput {
+    tx_ids: Vec<String>,
 }
 
 #[derive(Deserialize)]
-struct PeerIdInput {
-    peer_id: String,
+struct SyncDagInput {
+    peer: String,
 }
 
 #[derive(Deserialize)]
 struct MultiaddrInput {
     multiaddr: String,
 }
+#[derive(Deserialize)]
+struct GetFamilyInput {
+    tx_id: String,
+    levels: usize,
+}
+
+
+
 #[derive(Debug)]
 pub enum ApiEvent {
-    SendTx { contract: TxHash, function: String, args: Vec<Vec<u8>>, respond_to: oneshot::Sender<TxHash> },
-    TxStatus { tx_id: TxHash, respond_to: oneshot::Sender<String> },
-    DialPeer { peer_id: String, respond_to: oneshot::Sender<bool> },
-    GetPeers { respond_to: oneshot::Sender<Vec<String>> },
-    GetKnownAddresses { respond_to: oneshot::Sender<Vec<Multiaddr>> },
-    SelfPeerId { respond_to: oneshot::Sender<String> },
+    InitDag { respond_to: oneshot::Sender<Result<(), String>> },
     Bootstrap { bootstrap_addr: String, respond_to: oneshot::Sender<Result<(), String>> },
-    GetAccount { peer_id: String, respond_to: oneshot::Sender<Vec<u8>> },
-    GetContract { contract_address: TxHash, respond_to: oneshot::Sender<Vec<u8>> },
-    GetTx { tx_id: TxHash, respond_to: oneshot::Sender<TransactionWithId> },
-    GetParents { tx_id: TxHash, respond_to: oneshot::Sender<Vec<TxHash>> },
-    GetChildren { tx_id: TxHash,  respond_to: oneshot::Sender<Vec<TxHash>> },
-    GetSyncStatus { respond_to: oneshot::Sender<String> },
+    SendTx { contract: String, function: String, args: HashMap<String, Vec<u8>>, respond_to: oneshot::Sender<Result<TxHash, String>> },
+    SyncDag { peer: String, respond_to: oneshot::Sender<Result<(), String>> },
+    GetTx { tx_id: String, respond_to: oneshot::Sender<Result<TransactionWithId, String>> },
+    GetTxs{ tx_ids: Vec<String>, respond_to: oneshot::Sender<Vec<TransactionWithId>> },
+    GetAncestry { tx_id: String, levels: usize,  respond_to: oneshot::Sender<Result<HashSet<TxHash>, String>> },
+    GetPeers { respond_to: oneshot::Sender<Vec<String>> },
+    GetKnownAddresses { respond_to: oneshot::Sender<Vec<String>> },
+    SelfPeerId { respond_to: oneshot::Sender<String> },
+    SelfAddresses { respond_to: oneshot::Sender<Vec<String>> },
+    DialPeer { peer_id: String, multiaddr: String, respond_to: oneshot::Sender<bool> },
     DagHeight { respond_to: oneshot::Sender<u32> },
     Metrics { respond_to: oneshot::Sender<String> },
     Shutdown,
@@ -70,61 +83,48 @@ impl Api {
         let sender = self.sender.clone();
 
         let routes =
-            Self::post("send_tx", sender.clone(), |input: SendTxInput, respond_to| {
-                ApiEvent::SendTx {
-                    contract: TxHash::from_string(&input.contract),
-                    function: input.function,
-                    args: input.args,
-                    respond_to,
-                }
+            Self::post("sendTx", sender.clone(), |input: SendTxInput, respond_to| {
+                ApiEvent::SendTx {contract: input.contract, function: input.function, args: input.args, respond_to }
             })
-                .or(Self::post("tx_status", sender.clone(), |input: TxIdInput, respond_to| {
-                    ApiEvent::TxStatus { tx_id: input.tx_id, respond_to }
-                }))
-                .or(Self::post("dial_peer", sender.clone(), |input: DialPeerInput, respond_to| {
-                    let peer_id = input.peer_id.parse().expect("Invalid PeerId");
-                    ApiEvent::DialPeer { peer_id, respond_to }
-                }))
-                .or(Self::post("bootstrap", sender.clone(), |input: MultiaddrInput, respond_to| {
-                    ApiEvent::Bootstrap {
-                        bootstrap_addr: input.multiaddr,
-                        respond_to,
-                    }
-                }))
-                .or(Self::post("get_account", sender.clone(), |input: PeerIdInput, respond_to| {
-                    let peer_id = input.peer_id;
-                    ApiEvent::GetAccount { peer_id, respond_to }
-                }))
-                .or(Self::post("get_contract", sender.clone(), |input: TxIdInput, respond_to| {
-                    ApiEvent::GetContract { contract_address: input.tx_id, respond_to }
-                }))
-                .or(Self::post("get_tx", sender.clone(), |input: TxIdInput, respond_to| {
-                    ApiEvent::GetTx { tx_id: input.tx_id, respond_to }
-                }))
-                .or(Self::post("get_parents", sender.clone(), |input: TxIdInput, respond_to| {
-                    ApiEvent::GetParents { tx_id: input.tx_id, respond_to }
-                }))
-                .or(Self::post("get_children", sender.clone(), |input: TxIdInput, respond_to| {
-                    ApiEvent::GetChildren { tx_id: input.tx_id, respond_to }
-                }))
-                .or(Self::get("get_peers", sender.clone(), |respond_to| {
-                    ApiEvent::GetPeers { respond_to }
-                }))
-                .or(Self::get("get_known_addresses", sender.clone(), |respond_to| {
-                    ApiEvent::GetKnownAddresses { respond_to }
-                }))
-                .or(Self::get("self_peer_id", sender.clone(), |respond_to| {
-                    ApiEvent::SelfPeerId { respond_to }
-                }))
-                .or(Self::get("get_sync_status", sender.clone(), |respond_to| {
-                    ApiEvent::GetSyncStatus { respond_to }
-                }))
-                .or(Self::get("dag_height", sender.clone(), |respond_to| {
-                    ApiEvent::DagHeight { respond_to }
-                }))
-                .or(Self::get("metrics", sender.clone(), |respond_to| {
-                    ApiEvent::Metrics { respond_to }
-                }));
+            .or(Self::post("bootstrap", sender.clone(), |input: MultiaddrInput, respond_to| {
+                ApiEvent::Bootstrap { bootstrap_addr: input.multiaddr, respond_to }
+            }))
+            .or(Self::get("initDag", sender.clone(), |respond_to| {
+                ApiEvent::InitDag { respond_to }
+            }))
+            .or(Self::post("syncDag", sender.clone(), | input: SyncDagInput, respond_to| {
+                ApiEvent::SyncDag { peer: input.peer, respond_to }
+            }))
+            .or(Self::post("getTx", sender.clone(), |input: TxIdInput, respond_to| {
+                ApiEvent::GetTx { tx_id: input.tx_id, respond_to }
+            }))
+            .or(Self::post("getTxs", sender.clone(), |input: TxIdsInput, respond_to| {
+                ApiEvent::GetTxs { tx_ids: input.tx_ids, respond_to }
+            }))
+            .or(Self::post("getAncestry", sender.clone(), |input: GetFamilyInput, respond_to| {
+                ApiEvent::GetAncestry { tx_id: input.tx_id, levels: input.levels, respond_to }
+            }))
+            .or(Self::get("getPeers", sender.clone(), |respond_to| {
+                ApiEvent::GetPeers { respond_to }
+            }))
+            .or(Self::get("getKnownAddresses", sender.clone(), |respond_to| {
+                ApiEvent::GetKnownAddresses { respond_to }
+            }))
+            .or(Self::get("selfPeerId", sender.clone(), |respond_to| {
+                ApiEvent::SelfPeerId { respond_to }
+            }))
+            .or(Self::get("selfAddress", sender.clone(), | respond_to| {
+                ApiEvent::SelfAddresses { respond_to }
+            }))
+            .or(Self::post("dialPeer", sender.clone(), |input: DialPeerInput, respond_to| {
+                ApiEvent::DialPeer { peer_id: input.peer_id, multiaddr: input.multiaddr, respond_to }
+            }))
+            .or(Self::get("dagHeight", sender.clone(), |respond_to| {
+                ApiEvent::DagHeight { respond_to }
+            }))
+            .or(Self::get("metrics", sender.clone(), |respond_to| {
+                ApiEvent::Metrics { respond_to }
+            }));
 
         warp::serve(routes).run(([0, 0, 0, 0], port)).await;
     }

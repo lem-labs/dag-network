@@ -1,37 +1,43 @@
-use std::collections::HashSet;
+use crate::api::ApiEvent;
+use crate::dag::{Dag, DagEvent, Transaction, TransactionWithId, TxHash};
+use crate::network::{DagSyncRequest, DagSyncResponse, LemuriaBehaviour, LemuriaBehaviourEvent, LemuriaRequest, LemuriaResponse};
+use bincode::error::EncodeError;
 use futures::StreamExt;
-use libp2p::{gossipsub, identify, kad, ping, Multiaddr, PeerId, Swarm};
+use libp2p::gossipsub::IdentTopic;
 use libp2p::kad::BootstrapOk;
 use libp2p::multiaddr::Protocol;
+use libp2p::request_response::{Event as RequestResponseEvent, Message as RequestResponseMessage};
+use libp2p::swarm::dial_opts::DialOpts;
 use libp2p::swarm::SwarmEvent;
+use libp2p::{gossipsub, identify, kad, ping, Multiaddr, PeerId, Swarm};
+use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use tokio::sync::mpsc::Receiver;
-use crate::dag::{DagLedger, TransactionWithId, TxHash};
-use crate::network::{LemuriaBehaviour, LemuriaBehaviourEvent};
-use crate::api::ApiEvent;
-
+use tracing_subscriber::fmt::format;
 
 pub struct EventLoop {
     swarm: Swarm<LemuriaBehaviour>,
-    dag: DagLedger,
+    dag: Dag,
     api_receiver: Receiver<ApiEvent>,
+    dag_receiver: Receiver<DagEvent>,
     discovered_peers: HashSet<PeerId>,
 }
 
 impl EventLoop {
 
     pub fn new(swarm: Swarm<LemuriaBehaviour>, api_receiver: Receiver<ApiEvent> ) -> Self {
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
         Self {
             swarm,
             api_receiver,
-            dag: DagLedger::new(),
+            dag_receiver: rx,
+            dag: Dag::new(tx),
             discovered_peers: HashSet::new(),
         }
     }
 
 
     pub async fn run(&mut self) {
-
-        // self.dag.sync_dag().await;
 
         loop {
             tokio::select! {
@@ -41,8 +47,8 @@ impl EventLoop {
                 Some(api_event) = self.api_receiver.recv() => {
                     self.handle_api_event(api_event).await;
                 }
-                else => {
-                    break;
+                Some(dag_event) = self.dag_receiver.recv() => {
+                    self.handle_dag_event(dag_event).await;
                 }
             }
 
@@ -53,7 +59,7 @@ impl EventLoop {
     HANDLE SWARM EVENT
      */
     async fn handle_swarm_event(&mut self, event: SwarmEvent<LemuriaBehaviourEvent>) {
-        let peer_id = self.swarm.local_peer_id().clone();
+        let _peer_id = self.swarm.local_peer_id().clone();
 
         match event {
             SwarmEvent::Behaviour(behaviour_event) => {
@@ -129,6 +135,7 @@ impl EventLoop {
                             // Handle routing updates (new peers discovered)
                             kad::Event::RoutingUpdated { peer, is_new_peer, addresses, .. } => {
                                 println!("Peer {} discovered, new: {}, addresses: {:?}", peer, is_new_peer, addresses);
+                                self.discovered_peers.insert(peer);
                             }
 
                             // Handle successful DHT queries
@@ -199,6 +206,7 @@ impl EventLoop {
                                 }
                             }
                             // Handle unroutable peers
+                            // TODO: what does this mean? I get it sometimes
                             kad::Event::UnroutablePeer { peer } => {
                                 println!("Unroutable peer detected: {:?}", peer);
                             },
@@ -211,8 +219,9 @@ impl EventLoop {
                     }
                     LemuriaBehaviourEvent::Identify(identify_event) => {
                         match identify_event {
-                            identify::Event::Received { connection_id, peer_id, info } => {
+                            identify::Event::Received { connection_id: _connection_id, peer_id, info } => {
                                 println!("Peer {peer_id} supports protocols: {:?}", info.protocols);
+                                self.discovered_peers.insert(peer_id);
                             }
                             identify::Event::Sent { connection_id, peer_id } => {
                                 println!("Identify sent to {peer_id} on connection {connection_id:?}");
@@ -223,11 +232,84 @@ impl EventLoop {
                             identify::Event::Error { peer_id, connection_id, error } => {
                                 eprintln!("Identify error with {peer_id} on connection {connection_id:?}: {error:?}");
                             }
-                            _ => {
-                                println!("Unhandled identify event: {:?}", identify_event);
+                        }
+                    }
+                    LemuriaBehaviourEvent::Rr(event) => {
+
+                        match event {
+                            RequestResponseEvent::Message { peer, message, .. } => match message {
+                                RequestResponseMessage::Request { request, channel, .. } => {
+                                    match request {
+                                        LemuriaRequest::DagSync(req) => {
+                                            println!("Received DagSync request from {:?}", peer);
+
+                                            let dag = self.dag.transactions.clone();
+                                            let encoded_dag = bincode::encode_to_vec(&dag, bincode::config::standard()).unwrap_or_default(); // TODO: replace with proper error handling
+                                            let tips_children = self.dag.tips_children.clone();
+                                            let encoded_tips_children = bincode::encode_to_vec(&tips_children, bincode::config::standard()).unwrap_or_default();
+                                            let response = LemuriaResponse::DagSync(DagSyncResponse { dag_data: encoded_dag, tips_children_data: encoded_tips_children });
+
+                                            if let Err(e) = self.swarm.behaviour_mut().rr.send_response(channel, response) {
+                                                eprintln!("Failed to send response to {:?}: {:?}", peer, e);
+                                            }
+                                        }
+                                        // Handle other request variants here
+                                    }
+                                }
+                                RequestResponseMessage::Response { response, .. } => {
+                                    match response {
+                                        LemuriaResponse::DagSync(resp) => {
+                                            println!("Received DagSync response from {:?} with {} bytes", peer, resp.dag_data.len());
+
+                                            let config = bincode::config::standard();
+                                            match bincode::decode_from_slice::<HashMap<TxHash, Transaction>, _>(&resp.dag_data, config) {
+                                                Ok((received_tx_map, _)) => {
+                                                    println!("Decoded {} DAG entries", received_tx_map.len());
+
+                                                    match bincode::decode_from_slice::<HashMap<TxHash, HashSet<TxHash>>, _>(&resp.tips_children_data, config) {
+                                                        Ok((received_t_c_map, _)) => {
+                                                            for (txid, tx) in received_tx_map {
+                                                                if !self.dag.transactions.contains_key(&txid) {
+                                                                    let _ = self.dag.transactions.insert(txid, tx);
+                                                                }
+                                                            }
+                                                            for (txid, tx) in received_t_c_map {
+                                                                if !self.dag.tips_children.contains_key(&txid) {
+                                                                    let _ = self.dag.tips_children.insert(txid, tx);
+                                                                }
+                                                            }
+                                                            // TODO: update state tree
+                                                        }
+                                                        Err(e) => {
+                                                            eprintln!("Failed to decode received tips-children from {:?}: {:?}", peer, e);
+                                                        }
+                                                    }
+
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Failed to decode DAG sync response: {:?}", e);
+                                                }
+                                            }
+                                        }
+                                        // Handle other response variants here
+                                    }
+                                }
+                            },
+
+                            RequestResponseEvent::OutboundFailure { peer, error, request_id, connection_id } => {
+                                println!("Outbound request to {:?} (id: {:?}) failed: {:?}", peer, request_id, error);
+                            }
+
+                            RequestResponseEvent::InboundFailure { peer, error, request_id, connection_id } => {
+                                println!("Inbound response from {:?} (id: {:?}) failed: {:?}", peer, request_id, error);
+                            }
+
+                            RequestResponseEvent::ResponseSent { peer, request_id, connection_id } => {
+                                println!("Response sent to {:?} (id: {:?})", peer, request_id);
                             }
                         }
                     }
+
                 }
             }
             SwarmEvent::Dialing { peer_id: Some(peer_id), .. } => {
@@ -239,15 +321,18 @@ impl EventLoop {
             }
             SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established, .. } => {
                 println!("Connection established with {peer_id} via {endpoint:?} ({num_established} total)");
+                self.discovered_peers.insert(peer_id);
             }
             SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                 println!("Connection closed with {}: {:?}", peer_id, cause);
+                self.discovered_peers.remove(&peer_id);
             }
             SwarmEvent::IncomingConnection { local_addr, send_back_addr, connection_id } => {
                 println!("Incoming connection: local: {:?}, remote: {:?}, connection_id: {:?}", local_addr, send_back_addr, connection_id);
             }
             SwarmEvent::NewExternalAddrOfPeer { peer_id, address } => {
                 println!("Peer {} announced valid external address: {}", peer_id, address);
+                self.discovered_peers.insert(peer_id);
             }
             SwarmEvent::NewExternalAddrCandidate { address } => {
                 println!("New external address candidate: {:?}", address)
@@ -274,20 +359,28 @@ impl EventLoop {
         println!("  from: {}", propagation_source);
         println!("  message_id: {}", message_id);
 
-        if let Ok(tx) = serde_json::from_slice::<TransactionWithId>(&message.data) {
+        let config = bincode::config::standard();
+        let result: Result<(TransactionWithId, usize), _> = bincode::decode_from_slice(&message.data, config);
 
-            match self.dag.add_tx(tx.clone()) {
-                Ok(()) => {
-                    println!("Transaction added to dag: {:?}", tx.id);
-                    println!("DAG Current State: {:?}", self.dag.state_tree);
-                }
-                Err(e) => {
-                    eprintln!("Error adding transaction: {:?}", e);
-
+        match result {
+            Ok((tx_with_id, _bytes_read)) => {
+                let tx = Transaction {
+                    parents: tx_with_id.parents,
+                    prev_state_root: tx_with_id.prev_state_root,
+                    new_state_root: tx_with_id.new_state_root,
+                    zk_proof: tx_with_id.zk_proof,
+                    data: tx_with_id.data,
+                    metadata: tx_with_id.metadata,
+                };
+                match self.dag.add_tx(tx_with_id.id, tx.clone()) {
+                    Ok(()) => {
+                        println!("Transaction added to dag: {:?}", tx_with_id.id);
+                        println!("DAG Current State: {:?}", self.dag.state_tree);
+                    }
+                    Err(e) => eprintln!("Error adding transaction: {:?}", e)
                 }
             }
-        } else {
-            println!("  message: {:?}", std::str::from_utf8(&message.data).unwrap());
+            Err(e) => eprintln!("Failed to deserialize incoming message: {:?}", e)
         }
     }
 
@@ -298,86 +391,138 @@ impl EventLoop {
     async fn handle_api_event(&mut self, api_event: ApiEvent) {
 
         match api_event {
-
-            //Transaction Events
+            ApiEvent::Bootstrap { bootstrap_addr, respond_to } => {
+                if let Err(e) = self.bootstrap(bootstrap_addr).await {
+                    let _ = respond_to.send(Err(e));
+                } else {
+                    let _ = respond_to.send(Ok(()));
+                }
+            }
+            ApiEvent::InitDag { respond_to } => {
+                self.dag.initialize_dag();
+                let _ = respond_to.send(Ok(()));
+            }
             ApiEvent::SendTx { contract, function, args, respond_to } => {
-                self.submit_tx(contract, function, args).await;
-            }
-            ApiEvent::TxStatus {tx_id, respond_to } => {
-                let tx_status = "";
-                let _ = respond_to.send(tx_status.parse().unwrap());
-            }
+                println!("Sending Transaction: contract: {:?}, function: {}, args: {:?}", contract, function, args);
+                match TxHash::from_hex(&contract) {
+                    Ok(tx_hash) => {
+                        match self.dag.tx(tx_hash, function, args).await {
+                            Ok(tx_hash) => {
+                                println!("Transaction sent successfully with id {:?}", tx_hash);
+                                let _ = respond_to.send(Ok(tx_hash));
+                            }
+                            Err(e) => {
+                                let error_message = format!("Transaction failed: {:?}", e);
+                                eprintln!("{}", error_message);
+                                let _ = respond_to.send(Err(error_message));
+                            }
+                        }
+                    } Err(e) => {
 
-            // Network Events
-            ApiEvent::DialPeer {peer_id, respond_to} => {
-                let _ = respond_to.send(true);
+                    }
+                }
+
+            }
+            ApiEvent::SyncDag {peer, respond_to} => {
+                let peer_id = PeerId::from_str(&peer).unwrap();
+                let request = LemuriaRequest::DagSync(DagSyncRequest {});
+                let request_id = self.swarm.behaviour_mut().rr.send_request(&peer_id, request);
+                println!("Successfully sent sync dag request with request id: {:?}", request_id);
+
+                let _ = respond_to.send(Ok(()));
+            }
+            ApiEvent::GetTx {tx_id, respond_to} => {
+                println!("Received GetTx request for TxId: {:?}", tx_id);
+                match TxHash::from_hex(&tx_id) {
+                    Ok(txid) => {
+                        if let Some(txc) = self.dag.transactions.get(&txid) {
+                            let tx = txc.clone();
+                            let _ = respond_to.send(Ok(TransactionWithId {
+                                id: txid,
+                                parents: tx.parents,
+                                prev_state_root: tx.prev_state_root,
+                                new_state_root: tx.new_state_root,
+                                zk_proof: tx.zk_proof,
+                                data: tx.data,
+                                metadata: tx.metadata,
+                            }));
+                        } else {
+                            let _ = respond_to.send(Err(format!("No transaction found with id {:?}", tx_id)));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = respond_to.send(Err(format!("Invalid transaction id: {:?}", tx_id)));
+                    }
+                }
+            }
+            ApiEvent::GetTxs {tx_ids, respond_to} => {
+                let mut txids: Vec<TxHash> = vec![];
+                for txid in tx_ids {
+                    if let Ok(t) = TxHash::from_hex(&*txid) {
+                        txids.push(t);
+                    }
+                }
+
+                let mut txs: Vec<TransactionWithId> = vec![];
+                for txid in txids {
+                    if let Some(tx) = self.dag.transactions.get(&txid) {
+                        let tx = tx.clone();
+                        txs.push(TransactionWithId {
+                            id: txid,
+                            parents: tx.parents,
+                            prev_state_root: tx.prev_state_root,
+                            new_state_root: tx.new_state_root,
+                            zk_proof: tx.zk_proof,
+                            data: tx.data,
+                            metadata: tx.metadata,
+                        });
+                    }
+                }
+                let _ = respond_to.send(txs);
+            }
+            ApiEvent::GetAncestry {tx_id, levels, respond_to} => {
+                println!("Received GetAncestry request for TxId: {:?}", tx_id);
+                match TxHash::from_hex(&tx_id) {
+                    Ok(txid) => {
+                        let ancestry = self.dag.get_ancestry(&txid, levels);
+                        let _ = respond_to.send(Ok(ancestry));
+                    }
+                    Err(e) => {
+                        let _ = respond_to.send(Err(format!("Error, invalid tx id: {:?}", tx_id)));
+                    }
+                }
+
             }
             ApiEvent::GetPeers { respond_to } => {
-                let _ = respond_to.send(vec!["peer1".to_string(), "peer2".to_string()]);
+                println!("Received GetPeers request for TxId");
+                let _ = respond_to.send(vec![]);
             }
             ApiEvent::GetKnownAddresses { respond_to} => {
+                println!("Received GetKnownAddresses request for TxId");
                 let _ = respond_to.send(vec![]);
 
             }
             ApiEvent::SelfPeerId { respond_to} => {
+                println!("Received SelfPeerId request");
                 let peer_id = self.swarm.local_peer_id().to_string();
+                println!("PeerID: {:?}", peer_id);
                 let _ = respond_to.send(peer_id);
             }
-
-            // State Events
-            ApiEvent::GetAccount {peer_id, respond_to} => {
-                let _ = respond_to.send(vec![]);
+            ApiEvent::SelfAddresses {respond_to} => {
+                println!("Received SelfAddresses request");
+                let addresses = self.swarm.listeners()
+                    .map(|addr| addr.to_string())
+                    .collect::<Vec<String>>();
+                let _ = respond_to.send(addresses);
             }
-            ApiEvent::Bootstrap { bootstrap_addr, respond_to } => {
-                println!("Attempting bootstrap to {}", bootstrap_addr);
-
-                if !bootstrap_addr.is_empty() {
-                    match bootstrap_addr.parse::<Multiaddr>() {
-                        Ok(bootstrap_multiaddr) => {
-                            let (peer_address, peer_id) = extract_peer_id(&bootstrap_multiaddr);
-                            if let Err(e) = self.swarm.dial(bootstrap_multiaddr) {
-                                let _ = respond_to.send(Err(format!("Failed to dial: {:?}", e)));
-                                return;
-                            }
-                            self.swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_address);
-                            match self.swarm.behaviour_mut().kademlia.bootstrap() {
-                                Ok(_) => {
-                                    let _ = respond_to.send(Ok(()));
-                                }
-                                Err(e) => {
-                                    let _ = respond_to.send(Err(format!("Kademlia bootstrap failed: {:?}", e)));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let _ = respond_to.send(Err(format!("Invalid multiaddr: {:?}", e)));
-                        }
-                    }
-                } else {
-                    let addrs: Vec<Multiaddr> = Swarm::listeners(&self.swarm)
-                        .map(|addr| addr.clone().with(Protocol::P2p((*self.swarm.local_peer_id()).into())))
-                        .collect();
-                    println!("No bootstrap node provided, starting as bootstrap node...");
-                    println!("Bootstrap node addresses: {:?}", addrs);
-                    let _ = respond_to.send(Ok(()));
+            ApiEvent::DialPeer {peer_id, multiaddr, respond_to} => {
+                println!("Received DialPeer request for PeerId: {:?}", peer_id);
+                let dial_opts=  DialOpts::peer_id(peer_id.parse().unwrap()).addresses(vec![multiaddr.parse().unwrap()]).build();
+                match self.swarm.dial(dial_opts) {
+                    Ok(_) => {let _ = respond_to.send(true);}
+                    Err(e) => {let _ = respond_to.send(false);}
                 }
-            }
-            ApiEvent::GetContract {contract_address, respond_to} => {
-                println!("Get contract {:?}", contract_address);
-            }
-            ApiEvent::GetTx {tx_id, respond_to} => {
-                println!("Get tx {:?}", tx_id);
-            }
-            ApiEvent::GetParents {tx_id, respond_to} => {
-                println!("Get parents {:?}", tx_id);
-            }
-            ApiEvent::GetChildren {tx_id, respond_to} => {
-                println!("Get children {:?}", tx_id);
-            }
 
-            // Sync events
-            ApiEvent::GetSyncStatus { respond_to} => {
-                println!("Get sync status");
             }
             ApiEvent::DagHeight{ respond_to}  => {
                 println!("Dag height");
@@ -388,15 +533,65 @@ impl EventLoop {
                 println!("Metrics");
             }
             ApiEvent::Shutdown => {
-                println!("Shutdown");
+                println!("Shutdown signal received, exiting...");
+                std::process::exit(0);
             }
-
             _ => println!("Unhandled api event: {:?}", api_event),
         }
     }
 
-    async fn submit_tx(&mut self, contract: TxHash, function: String, args: Vec<Vec<u8>>) {
-        println!("Submitting transaction: contract: {:?}, function: {:?}, args: {:?}", contract, function, args);
+    async fn handle_dag_event(&mut self, dag_event: DagEvent) {
+        match dag_event {
+            DagEvent::Broadcast {txid, tx } => {
+                let topic = IdentTopic::new("lemuria-zk-dag");
+                let tx_clone = tx.clone();
+                let msg = TransactionWithId {
+                    id: txid,
+                    parents: tx_clone.parents,
+                    prev_state_root: tx_clone.prev_state_root,
+                    new_state_root: tx_clone.new_state_root,
+                    zk_proof: tx_clone.zk_proof,
+                    data: tx_clone.data,
+                    metadata: tx_clone.metadata,
+                };
+                let config = bincode::config::standard();
+                let encoded: Result<Vec<u8>, EncodeError> = bincode::encode_to_vec(&msg, config);
+                match encoded {
+                    Ok(encoded) => {
+                        self.swarm.behaviour_mut().gossipsub.publish(topic, encoded).expect("Failed to publish transaction");
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to encode transaction {:?}: {:?}, Error: {:?}", txid, tx, e);
+                    }
+                }
+            }
+        }
+    }
+
+    async fn bootstrap(&mut self, bootstrap_addr: String) -> Result<(), String> {
+        println!("Attempting bootstrap to {}", bootstrap_addr);
+        match bootstrap_addr.parse::<Multiaddr>() {
+            Ok(bootstrap_multiaddr) => {
+                let (peer_address, peer_id) = extract_peer_id(&bootstrap_multiaddr);
+                if let Err(e) = self.swarm.dial(bootstrap_multiaddr) {
+                    return Err(format!("Bootstrapping failed - Failed to dial: {:?}", e));
+                }
+                self.swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_address);
+                match self.swarm.behaviour_mut().kademlia.bootstrap() {
+                    Ok(_) => {
+                        println!("Successfully bootstrapped to {}", bootstrap_addr);
+                        Ok(())
+
+                    }
+                    Err(e) => {
+                        Err(format!("Failed to bootstrap peer to {}: {:?}", bootstrap_addr, e))
+                    }
+                }
+            }
+            Err(e) => {
+                Err(format!("Invalid multiaddr: {:?}", e))
+            }
+        }
     }
 
 }
