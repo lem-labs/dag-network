@@ -6,7 +6,7 @@ use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic;
 use libp2p::kad::BootstrapOk;
 use libp2p::multiaddr::Protocol;
-use libp2p::request_response::{Event as RequestResponseEvent, Message as RequestResponseMessage};
+use libp2p::request_response::{Event as RequestResponseEvent, Message as RequestResponseMessage, ResponseChannel};
 use libp2p::swarm::dial_opts::DialOpts;
 use libp2p::swarm::SwarmEvent;
 use libp2p::{gossipsub, identify, kad, ping, Multiaddr, PeerId, Swarm};
@@ -64,12 +64,14 @@ impl EventLoop {
         match event {
             SwarmEvent::Behaviour(behaviour_event) => {
                 match behaviour_event {
+                    // --- PING ---
                     LemuriaBehaviourEvent::Ping(ping::Event { peer, result, .. }) => {
                         match result {
                             Ok(rtt) => println!("Ping to {}: {} ms", peer, rtt.as_millis()),
                             Err(e) => println!("Ping error with {}: {:?} ms", peer, e),
                         }
                     }
+                    // --- GOSSIPSUB ---
                     LemuriaBehaviourEvent::Gossipsub(gs_event) => {
                         match gs_event {
                             gossipsub::Event::Message { propagation_source, message_id, message } => {
@@ -86,9 +88,10 @@ impl EventLoop {
                             }
                         }
                     }
+                    // --- KADEMLIA ---
                     LemuriaBehaviourEvent::Kademlia(kad_event) => {
                         match kad_event {
-                            // Handle incoming Kademlia requests
+                            // --- INBOUND REQUEST
                             kad::Event::InboundRequest { request } => {
                                 println!("Kad REQUEST: :{:?}", request);
                                 match request {
@@ -131,14 +134,11 @@ impl EventLoop {
 
                                 }
                             }
-
-                            // Handle routing updates (new peers discovered)
                             kad::Event::RoutingUpdated { peer, is_new_peer, addresses, .. } => {
                                 println!("Peer {} discovered, new: {}, addresses: {:?}", peer, is_new_peer, addresses);
                                 self.discovered_peers.insert(peer);
                             }
-
-                            // Handle successful DHT queries
+                            // --- OUTBOUND QUERY PROGRESSED ---
                             kad::Event::OutboundQueryProgressed { id, ref result, .. } => {
                                 println!("Kademlia query progressed: Query ID: {:?}", id.to_string());
 
@@ -206,17 +206,16 @@ impl EventLoop {
                                 }
                             }
                             // Handle unroutable peers
-                            // TODO: what does this mean? I get it sometimes
+                            // TODO: what does this mean? It appears in bootstrap node logs, but then peer connects
                             kad::Event::UnroutablePeer { peer } => {
                                 println!("Unroutable peer detected: {:?}", peer);
                             },
-
-                            // Catch all unhandled events
                             _ => {
                                 println!("Unhandled Kademlia event: {:?}", kad_event);
                             }
                         }
                     }
+                    // --- IDENTIFY ---
                     LemuriaBehaviourEvent::Identify(identify_event) => {
                         match identify_event {
                             identify::Event::Received { connection_id: _connection_id, peer_id, info } => {
@@ -234,82 +233,36 @@ impl EventLoop {
                             }
                         }
                     }
+                    // --- REQUEST RESPONSE ---
                     LemuriaBehaviourEvent::Rr(event) => {
-
                         match event {
                             RequestResponseEvent::Message { peer, message, .. } => match message {
                                 RequestResponseMessage::Request { request, channel, .. } => {
+                                    // --- REQUEST
                                     match request {
-                                        LemuriaRequest::DagSync(req) => {
-                                            println!("Received DagSync request from {:?}", peer);
-
-                                            let dag = self.dag.transactions.clone();
-                                            let encoded_dag = bincode::encode_to_vec(&dag, bincode::config::standard()).unwrap_or_default(); // TODO: replace with proper error handling
-                                            let tips_children = self.dag.tips_children.clone();
-                                            let encoded_tips_children = bincode::encode_to_vec(&tips_children, bincode::config::standard()).unwrap_or_default();
-                                            let response = LemuriaResponse::DagSync(DagSyncResponse { dag_data: encoded_dag, tips_children_data: encoded_tips_children });
-
-                                            if let Err(e) = self.swarm.behaviour_mut().rr.send_response(channel, response) {
-                                                eprintln!("Failed to send response to {:?}: {:?}", peer, e);
-                                            }
-                                        }
-                                        // Handle other request variants here
+                                        LemuriaRequest::DagSync(req) => self.handle_dag_sync_request(peer, channel)
+                                        // Handle other LemuriaRequest variants here
                                     }
                                 }
                                 RequestResponseMessage::Response { response, .. } => {
+                                    // --- RESPONSE ---
                                     match response {
-                                        LemuriaResponse::DagSync(resp) => {
-                                            println!("Received DagSync response from {:?} with {} bytes", peer, resp.dag_data.len());
-
-                                            let config = bincode::config::standard();
-                                            match bincode::decode_from_slice::<HashMap<TxHash, Transaction>, _>(&resp.dag_data, config) {
-                                                Ok((received_tx_map, _)) => {
-                                                    println!("Decoded {} DAG entries", received_tx_map.len());
-
-                                                    match bincode::decode_from_slice::<HashMap<TxHash, HashSet<TxHash>>, _>(&resp.tips_children_data, config) {
-                                                        Ok((received_t_c_map, _)) => {
-                                                            for (txid, tx) in received_tx_map {
-                                                                if !self.dag.transactions.contains_key(&txid) {
-                                                                    let _ = self.dag.transactions.insert(txid, tx);
-                                                                }
-                                                            }
-                                                            for (txid, tx) in received_t_c_map {
-                                                                if !self.dag.tips_children.contains_key(&txid) {
-                                                                    let _ = self.dag.tips_children.insert(txid, tx);
-                                                                }
-                                                            }
-                                                            // TODO: update state tree
-                                                        }
-                                                        Err(e) => {
-                                                            eprintln!("Failed to decode received tips-children from {:?}: {:?}", peer, e);
-                                                        }
-                                                    }
-
-                                                }
-                                                Err(e) => {
-                                                    eprintln!("Failed to decode DAG sync response: {:?}", e);
-                                                }
-                                            }
-                                        }
-                                        // Handle other response variants here
+                                        LemuriaResponse::DagSync(resp) => self.handle_dag_sync_response(resp, peer)
+                                        // Handle other LemuriaResponse variants here
                                     }
                                 }
                             },
-
                             RequestResponseEvent::OutboundFailure { peer, error, request_id, connection_id } => {
                                 println!("Outbound request to {:?} (id: {:?}) failed: {:?}", peer, request_id, error);
                             }
-
                             RequestResponseEvent::InboundFailure { peer, error, request_id, connection_id } => {
                                 println!("Inbound response from {:?} (id: {:?}) failed: {:?}", peer, request_id, error);
                             }
-
                             RequestResponseEvent::ResponseSent { peer, request_id, connection_id } => {
                                 println!("Response sent to {:?} (id: {:?})", peer, request_id);
                             }
                         }
                     }
-
                 }
             }
             SwarmEvent::Dialing { peer_id: Some(peer_id), .. } => {
@@ -345,7 +298,6 @@ impl EventLoop {
                     eprintln!("Failed to connect to {}: {:?}", peer_id, error);
                 }
             }
-
             // Handle unexpected events
             _ => {
                 println!("Unhandled swarm event: {:?}", event);
@@ -366,9 +318,9 @@ impl EventLoop {
             Ok((tx_with_id, _bytes_read)) => {
                 let tx = Transaction {
                     parents: tx_with_id.parents,
+                    contract_call: tx_with_id.contract_call,
                     prev_state_root: tx_with_id.prev_state_root,
                     new_state_root: tx_with_id.new_state_root,
-                    zk_proof: tx_with_id.zk_proof,
                     data: tx_with_id.data,
                     metadata: tx_with_id.metadata,
                 };
@@ -406,7 +358,7 @@ impl EventLoop {
                 println!("Sending Transaction: contract: {:?}, function: {}, args: {:?}", contract, function, args);
                 match TxHash::from_hex(&contract) {
                     Ok(tx_hash) => {
-                        match self.dag.tx(tx_hash, function, args).await {
+                        match self.dag.tx(tx_hash, function, args, self.swarm.local_peer_id().to_string(), 0).await {
                             Ok(tx_hash) => {
                                 println!("Transaction sent successfully with id {:?}", tx_hash);
                                 let _ = respond_to.send(Ok(tx_hash));
@@ -436,15 +388,15 @@ impl EventLoop {
                 match TxHash::from_hex(&tx_id) {
                     Ok(txid) => {
                         if let Some(txc) = self.dag.transactions.get(&txid) {
-                            let tx = txc.clone();
+                            let tx_clone = txc.clone();
                             let _ = respond_to.send(Ok(TransactionWithId {
                                 id: txid,
-                                parents: tx.parents,
-                                prev_state_root: tx.prev_state_root,
-                                new_state_root: tx.new_state_root,
-                                zk_proof: tx.zk_proof,
-                                data: tx.data,
-                                metadata: tx.metadata,
+                                parents: tx_clone.parents,
+                                contract_call: tx_clone.contract_call,
+                                prev_state_root: tx_clone.prev_state_root,
+                                new_state_root: tx_clone.new_state_root,
+                                data: tx_clone.data,
+                                metadata: tx_clone.metadata,
                             }));
                         } else {
                             let _ = respond_to.send(Err(format!("No transaction found with id {:?}", tx_id)));
@@ -466,15 +418,15 @@ impl EventLoop {
                 let mut txs: Vec<TransactionWithId> = vec![];
                 for txid in txids {
                     if let Some(tx) = self.dag.transactions.get(&txid) {
-                        let tx = tx.clone();
+                        let tx_clone = tx.clone();
                         txs.push(TransactionWithId {
                             id: txid,
-                            parents: tx.parents,
-                            prev_state_root: tx.prev_state_root,
-                            new_state_root: tx.new_state_root,
-                            zk_proof: tx.zk_proof,
-                            data: tx.data,
-                            metadata: tx.metadata,
+                            parents: tx_clone.parents,
+                            contract_call: tx_clone.contract_call,
+                            prev_state_root: tx_clone.prev_state_root,
+                            new_state_root: tx_clone.new_state_root,
+                            data: tx_clone.data,
+                            metadata: tx_clone.metadata,
                         });
                     }
                 }
@@ -548,9 +500,9 @@ impl EventLoop {
                 let msg = TransactionWithId {
                     id: txid,
                     parents: tx_clone.parents,
+                    contract_call: tx_clone.contract_call,
                     prev_state_root: tx_clone.prev_state_root,
                     new_state_root: tx_clone.new_state_root,
-                    zk_proof: tx_clone.zk_proof,
                     data: tx_clone.data,
                     metadata: tx_clone.metadata,
                 };
@@ -594,6 +546,52 @@ impl EventLoop {
         }
     }
 
+    fn handle_dag_sync_request(&mut self, peer: PeerId, channel: ResponseChannel<LemuriaResponse>) {
+        println!("Received DagSync request from {:?}", peer);
+
+        let dag = self.dag.transactions.clone();
+        let encoded_dag = bincode::encode_to_vec(&dag, bincode::config::standard()).unwrap_or_default(); // TODO: replace with proper error handling
+        let tips_children = self.dag.tips_children.clone();
+        let encoded_tips_children = bincode::encode_to_vec(&tips_children, bincode::config::standard()).unwrap_or_default();
+        let response = LemuriaResponse::DagSync(DagSyncResponse { dag_data: encoded_dag, tips_children_data: encoded_tips_children });
+
+        if let Err(e) = self.swarm.behaviour_mut().rr.send_response(channel, response) {
+            eprintln!("Failed to send response to {:?}: {:?}", peer, e);
+        }
+    }
+
+    fn handle_dag_sync_response(&mut self, resp: DagSyncResponse, peer: PeerId) {
+        println!("Received DagSync response from {:?} with {} bytes", peer, resp.dag_data.len());
+        let config = bincode::config::standard();
+        match bincode::decode_from_slice::<HashMap<TxHash, Transaction>, _>(&resp.dag_data, config) {
+            Ok((received_tx_map, _)) => {
+                println!("Decoded {} DAG entries", received_tx_map.len());
+
+                match bincode::decode_from_slice::<HashMap<TxHash, HashSet<TxHash>>, _>(&resp.tips_children_data, config) {
+                    Ok((received_t_c_map, _)) => {
+                        for (txid, tx) in received_tx_map {
+                            // update transactions dag
+                            if !self.dag.transactions.contains_key(&txid) {
+                                let _ = self.dag.transactions.insert(txid, tx);
+                            }
+                        }
+                        // update tips -> children map
+                        for (txid, tx) in received_t_c_map {
+                            if !self.dag.tips_children.contains_key(&txid) {
+                                let _ = self.dag.tips_children.insert(txid, tx);
+                            }
+                        }
+                        // TODO: update state tree
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to decode received tips-children from {:?}: {:?}", peer, e);
+                    }
+                }
+            }
+            Err(e) =>  eprintln!("Failed to decode DAG sync response: {:?}", e)
+        }
+    }
+
 }
 
 fn extract_peer_id(addr: &Multiaddr) -> (Multiaddr, PeerId) {
@@ -609,3 +607,4 @@ fn extract_peer_id(addr: &Multiaddr) -> (Multiaddr, PeerId) {
         other => panic!("Expected Multiaddr to end with /p2p/<peer_id>, got {:?}", other),
     }
 }
+

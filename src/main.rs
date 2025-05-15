@@ -2,7 +2,6 @@ mod network;
 mod event_loop;
 mod dag;
 mod api;
-mod vm;
 
 use crate::api::Api;
 use std::io::Write;
