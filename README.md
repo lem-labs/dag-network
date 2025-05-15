@@ -1,4 +1,7 @@
 # dag-network
+### DAG Network, written in Rust
+
+This project is a demo DAG Network. It is meant to be used as a base for further research into zero knowledge DAG systems. 
 
 ### To Run:
 - compile lemutia-contracts:
@@ -12,6 +15,7 @@
   - this will be our nodes' controller
 - enter api port of `node_0` (our bootstrap node)
 - run `init-dag` command to initialize genesis blocks and initial contracts on bootstrap node
+  - note the address for the `registry` contract in the logs, this contract is used to deploy other contracts
 - for each other node:
   - run `port` command to switch to the api port of `node_i`
   - run `bootstrap` command, providing the bootstrap node's multiaddr
