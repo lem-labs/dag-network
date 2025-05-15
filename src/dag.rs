@@ -5,7 +5,8 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::hash::Hasher;
 use std::fmt;
-
+use wasmtime::{Engine, Store, Module, Instance, Linker, TypedFunc};
+use anyhow::Result;
 pub enum DagEvent {
     Broadcast { txid: TxHash, tx: Transaction }
 }
@@ -66,8 +67,17 @@ pub struct ContractCall {
     pub args: HashMap<String, Vec<u8>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Contract {}
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode)]
+pub struct ContractMetadata {
+    owner: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode)]
+pub struct Contract {
+    pub bytes: Vec<u8>,
+    pub metadata: ContractMetadata,
+
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub struct Metadata {
@@ -155,7 +165,7 @@ impl Dag {
             let cloned_transactions = self.transactions.clone();
             let contract_tx_option = cloned_transactions.get(&contract_address);
             if let Some(contract_tx) = contract_tx_option {
-                if let Some(contract) = self.deserialize_contract(contract_tx.data.clone()) {
+                if let Ok((contract, _)) = bincode::decode_from_slice::<Contract, _>(&contract_tx.data.clone(), bincode::config::standard()) {
                     if let Some((parent_1_hash, parent_2_hash)) = self.select_parents() {
                         // todo: get parent states, parent tx's, etc needed in vm
 
@@ -205,31 +215,25 @@ impl Dag {
         }
         /*
        TODO:
-       checks before adding to local dag:
-       - tx_id = hash(tx.contents)
-       - tx.parents are in the dag (and valid tips)
-       - tx.timestamp <= now + drift
-       - tx.state_root != 0
-       - tx.zk_proof != 0
+           checks before adding to local dag:
+           - tx_id = hash(tx.contents)
+           - tx.parents are in the dag (and valid tips)
+           - tx.timestamp <= now + drift
+           - tx.state_root != 0
+           - tx.zk_proof != 0
         */
 
         // remove parents from tips
         for parent in &tx.parents {
-            println!("Checking parent: {:?}", parent);
             if let Some(tip_children) = self.tips_children.get(parent) {
-                println!("let Some(tip_children) = self.tips_children.get(parent)");
                 if tip_children.len() > 1 {
-                    println!(" if tip_children.len() > 1 ");
-                    // enforce 2 child policy
                     self.tips_children.remove(parent);
                 } else {
-                    println!("ELSE");
                     let mut tip_children_clone = tip_children.clone();
                     tip_children_clone.insert(txid);
                     self.tips_children.insert(parent.clone(), tip_children_clone);
                 }
             } else {
-                println!("ELSE!!!");
                 // parent not in tips
                 return Err(format!("Bad Parent - parent not in tip: {:?}", parent).into());
             }
@@ -252,30 +256,31 @@ impl Dag {
         peer_id: String,
         retry: u8
     ) -> Result<(TxHash, Transaction, Vec<StateNode>), Box<dyn Error + Send + Sync>> {
+        // this function will later be executed in zkvm
         // TODO:
         //   - verify hash(private_key) == peer_id
         //   - hash contract bytecode and verify it matches hash (proof correct contract was run)
 
         match self.verify_parents(parents.clone()) {
             Ok(()) => {
-                let merged_state = self.merge_parent_states(parents.clone());
+                let (merged_root, merged_path) = self.merge_parent_states(parents.clone());
 
-                if let state_path = self.run_contract(
+                if let (new_state_root, state_path) = self.run_contract(
                     contract.clone(),
                     contract_function.clone(),
                     contract_args.clone(),
-                    merged_state.clone(),
+                    merged_path.clone(),
                 ) {
                     let tx = Transaction {
                         parents,
-                        prev_state_root: StateHash([0u8; 32]), // TODO: merged state root
-                        new_state_root: self.hash_state_tree(&state_path.clone()),
+                        prev_state_root: merged_root, // TODO: merged state root
+                        new_state_root,
                         contract_call: ContractCall {
                             address: contract_address.clone(),
                             function: contract_function.clone(),
                             args: contract_args.clone(),
                         },
-                        data: vec![], // todo: if contract_args included data to upload, include here
+                        data: vec![], // TODO: if contract_args included data to upload, include here
                         metadata: Metadata {
                             timestamp: current_timestamp(),
                             peer_id,
@@ -325,10 +330,6 @@ impl Dag {
         best_pair
     }
 
-    fn deserialize_contract(&self, contract_data: Vec<u8>) -> Option<Contract>{
-        // TODO: Replace with actual contract parsing logic (e.g. parse ABI or WASM header)
-        Some(Contract {})    }
-
     fn parent_pair_score(&mut self, tx1: &Transaction, tx2: &Transaction) -> u64 {
         let time_proximity = {
             let dt = (tx1.metadata.timestamp as i64 - tx2.metadata.timestamp as i64).abs() as u64;
@@ -359,69 +360,268 @@ impl Dag {
         arr
     }
 
-    fn verify_parents(&mut self, parents: Vec<TxHash>) -> Result<(), Box<dyn Error + Send + Sync>> {
-        /*
-        TODO:
-            - verify parent_1_tx and parent_2_tx
-                - prove:
-                    - no conflicts exist in parents states
-                    - zk proofs are valid
-                    - leads to given state change
-         */
-        for parent in &parents {
-            if !self.transactions.contains_key(parent) {
-                return Err(format!("Missing parent: {:?}", parent).into());
+    fn build_merkle_tree(&mut self, leaves: HashMap<Vec<u8>, Vec<u8>>) -> (StateHash, Vec<StateNode>) {
+        let mut leaf_nodes: Vec<(Vec<u8>, StateNode)> = leaves
+            .into_iter()
+            .map(|(key, value)| {
+                let node = StateNode::Leaf {
+                    key: key.clone(),
+                    value,
+                };
+                (key, node)
+            })
+            .collect();
+
+        // Sort by key for determinism
+        leaf_nodes.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut hashes_and_nodes: Vec<([u8; 32], StateNode)> = leaf_nodes
+            .into_iter()
+            .map(|(_, node)| {
+                let hash = self.hash_state_node(&node);
+                (hash, node)
+            })
+            .collect();
+
+        let mut state_path = Vec::new();
+
+        while hashes_and_nodes.len() > 1 {
+            let mut next_level = Vec::new();
+            for chunk in hashes_and_nodes.chunks(2) {
+                if chunk.len() == 2 {
+                    let (left_hash, left_node) = &chunk[0];
+                    let (right_hash, right_node) = &chunk[1];
+                    let branch = StateNode::Branch {
+                        left: *left_hash,
+                        right: *right_hash,
+                    };
+                    let branch_hash = self.hash_state_node(&branch);
+                    state_path.push(left_node.clone());
+                    state_path.push(right_node.clone());
+                    state_path.push(branch.clone());
+                    next_level.push((branch_hash, branch));
+                } else {
+                    let (only_hash, only_node) = &chunk[0];
+                    state_path.push(only_node.clone());
+                    next_level.push((*only_hash, only_node.clone()));
+                }
             }
+            hashes_and_nodes = next_level;
         }
-        Ok(())
+
+        let (root_hash, root_node) = hashes_and_nodes[0].clone();
+        state_path.push(root_node.clone());
+        self.state_tree.insert(TxHash(root_hash), root_node);
+        (StateHash(root_hash), state_path)
     }
 
-    fn merge_parent_states(&mut self, parents: Vec<TxHash>) -> Vec<StateNode> {
-        // TODO: Merkle merge
-        // Merge leaves from both parents into a new state vector
-        let mut merged = vec![];
+    pub fn apply_state_diff(&mut self, updates: HashMap<Vec<u8>, Vec<u8>>) -> (StateHash, Vec<StateNode>) {
+        self.build_merkle_tree(updates)
+    }
 
-        for parent in parents {
-            if let Some(tx) = self.transactions.get(&parent) {
-                let state_hash_bytes = tx.new_state_root.0;
-                let key = TxHash(state_hash_bytes);
-                if let Some(state_node) = self.state_tree.get(&key) {
-                    merged.push(state_node.clone());
+    /// Fetches all state key-value pairs from an existing root (if needed)
+    fn collect_state_from_root(&self, root: &StateHash) -> Option<HashMap<Vec<u8>, Vec<u8>>> {
+        let mut result = HashMap::new();
+        let mut stack = vec![TxHash(root.0)];
+
+        while let Some(current) = stack.pop() {
+            if let Some(node) = self.state_tree.get(&current) {
+                match node {
+                    StateNode::Leaf { key, value } => {
+                        result.insert(key.clone(), value.clone());
+                    }
+                    StateNode::Branch { left, right } => {
+                        stack.push(TxHash(*left));
+                        stack.push(TxHash(*right));
+                    }
+                    StateNode::Empty => {}
                 }
             }
         }
 
-        merged
+        if result.is_empty() {
+            None
+        } else {
+            Some(result)
+        }
     }
 
-    fn hash_state_tree(&self, nodes: &Vec<StateNode>) -> StateHash {
-        let mut hasher = Sha256::new();
-        for node in nodes {
-            let encoded = bincode::encode_to_vec(node, bincode::config::standard()).unwrap();
-            hasher.update(encoded);
+    fn verify_parents(&mut self, parents: Vec<TxHash>) -> Result<(), Box<dyn Error + Send + Sync>> {
+        if parents.len() != 2 {
+            return Err("Exactly two parents are required".into());
         }
-        let result = hasher.finalize();
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&result);
-        StateHash(arr)    }
+
+        let tx1 = self.transactions.get(&parents[0])
+            .ok_or_else(|| format!("Missing parent transaction: {:?}", parents[0]))?.clone();
+        let tx2 = self.transactions.get(&parents[1])
+            .ok_or_else(|| format!("Missing parent transaction: {:?}", parents[1]))?.clone();
+
+        let state1 = self.collect_state_from_root(&tx1.new_state_root)
+            .ok_or_else(|| format!("Failed to collect state from parent {:?}", parents[0]))?;
+        let state2 = self.collect_state_from_root(&tx2.new_state_root)
+            .ok_or_else(|| format!("Failed to collect state from parent {:?}", parents[1]))?;
+
+        // Detect conflicts
+        for (key, val1) in &state1 {
+            if let Some(val2) = state2.get(key) {
+                if val1 != val2 {
+                    return Err(format!("State conflict: key {:?} differs between parents", key).into());
+                }
+            }
+        }
+
+        // Merge state
+        let mut merged_state = state1.clone();
+        for (key, val) in state2 {
+            merged_state.entry(key).or_insert(val);
+        }
+
+        // Re-run contract
+        let contract_tx = self.transactions.get(&tx1.contract_call.address)
+            .ok_or_else(|| format!("Missing contract upload tx: {:?}", tx1.contract_call.address))?;
+
+        let contract: Contract = bincode::decode_from_slice::<Contract, _>(
+            &contract_tx.data,
+            bincode::config::standard()
+        )?.0;
+
+        // simulate execution
+        let (new_root, _) = self.run_contract(
+            contract,
+            tx1.contract_call.function.clone(),
+            tx1.contract_call.args.clone(),
+            merged_state.iter().map(|(k, v)| {
+                StateNode::Leaf { key: k.clone(), value: v.clone() }
+            }).collect()
+        );
+
+        if new_root != tx1.new_state_root {
+            return Err("Computed new state root does not match parent tx claimed state root".into());
+        }
+
+        Ok(())
+    }
+
+
+    fn merge_parent_states(&mut self, parents: Vec<TxHash>) -> (StateHash, Vec<StateNode>) {
+        let mut combined = HashMap::new();
+
+        for parent in parents.iter() {
+            if let Some(tx) = self.transactions.get(parent) {
+                if let Some(state) = self.collect_state_from_root(&tx.new_state_root) {
+                    for (k, v) in state {
+                        combined.insert(k, v);
+                    }
+                }
+            }
+        }
+
+        self.apply_state_diff(combined)
+    }
+
 
     fn run_contract(
         &mut self,
-        _contract: Contract,
-        _contract_function: String,
-        _contract_args: HashMap<String, Vec<u8>>,
-        _merged_state: Vec<StateNode>,
-    ) ->  Vec<StateNode> {
-        // TODO: run wasm contract
-        let new_node = StateNode::Leaf {
-            key: b"output".to_vec(),
-            value: b"result".to_vec(),
+        contract: Contract,
+        contract_function: String,
+        contract_args: HashMap<String, Vec<u8>>,
+        merged_state: Vec<StateNode>,
+    ) -> (StateHash, Vec<StateNode>) {
+        use wasmtime::{Engine, Store, Module, Instance, Linker, TypedFunc, Memory};
+        use anyhow::Result;
+
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
+        let module = match Module::from_binary(&engine, &contract.bytes) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("WASM compile error: {}", e);
+                return (StateHash([0u8; 32]), vec![]);
+            }
         };
 
-        let hash = self.hash_state_node(&new_node);
-        vec![new_node]
-    }
+        let linker = Linker::new(&engine);
+        let instance = match linker.instantiate(&mut store, &module) {
+            Ok(i) => i,
+            Err(e) => {
+                eprintln!("WASM instantiation error: {}", e);
+                return (StateHash([0u8; 32]), vec![]);
+            }
+        };
 
+        let memory = match instance.get_memory(&mut store, "memory") {
+            Some(m) => m,
+            None => {
+                eprintln!("Contract missing `memory` export");
+                return (StateHash([0u8; 32]), vec![]);
+            }
+        };
+
+        // Get the contract call function
+        let func: TypedFunc<(i32, i32), i32> = match instance.get_typed_func(&mut store, &contract_function) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("Missing export `{}`: {}", contract_function, e);
+                return (StateHash([0u8; 32]), vec![]);
+            }
+        };
+
+        // Convert args to a serialized map
+        let mut inputs = HashMap::new();
+        for (k, v) in contract_args {
+            inputs.insert(k, v); // keys are already String
+        }
+
+        let input_bytes = match bincode::encode_to_vec(&inputs, bincode::config::standard()) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("Arg serialization failed: {}", e);
+                return (StateHash([0u8; 32]), vec![]);
+            }
+        };
+
+        // Write input to WASM memory at offset 0
+        let input_ptr = 0;
+        if let Err(e) = memory.write(&mut store, input_ptr, &input_bytes) {
+            eprintln!("Failed to write input to memory: {}", e);
+            return (StateHash([0u8; 32]), vec![]);
+        }
+
+        // Call the WASM function
+        let result_ptr = match func.call(&mut store, (input_ptr as i32, input_bytes.len() as i32)) {
+            Ok(ptr) => ptr,
+            Err(e) => {
+                eprintln!("Contract execution failed: {}", e);
+                return (StateHash([0u8; 32]), vec![]);
+            }
+        };
+
+        // Read 4 bytes from result_ptr to get the result length
+        let mut len_buf = [0u8; 4];
+        if let Err(e) = memory.read(&mut store, result_ptr as usize, &mut len_buf) {
+            eprintln!("Failed to read result length: {}", e);
+            return (StateHash([0u8; 32]), vec![]);
+        }
+        let result_len = u32::from_le_bytes(len_buf) as usize;
+
+        // Now read the result payload
+        let mut result_buf = vec![0u8; result_len];
+        if let Err(e) = memory.read(&mut store, result_ptr as usize + 4, &mut result_buf) {
+            eprintln!("Failed to read result data: {}", e);
+            return (StateHash([0u8; 32]), vec![]);
+        }
+
+        // Deserialize the output state diff
+        let updates: HashMap<Vec<u8>, Vec<u8>> = match bincode::decode_from_slice(&result_buf, bincode::config::standard()) {
+            Ok((u, _)) => u,
+            Err(e) => {
+                eprintln!("Result deserialization failed: {}", e);
+                return (StateHash([0u8; 32]), vec![]);
+            }
+        };
+
+        self.apply_state_diff(updates)
+    }
 
     pub fn get_ancestry(&mut self, start: &TxHash, levels: usize) -> HashSet<TxHash> {
         let mut visited = HashSet::new();
