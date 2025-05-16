@@ -1,23 +1,21 @@
-Enter secret key seed: Enter p2p port: Enter api port: Generated keypair: PublicKey { publickey: Ed25519(PublicKey(compressed): ce44d521abe4a4b6c2d6f5e02d70ebd3d9e3d7edf2471228ed9f7f995a599a2) }
-Peer ID: PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ")
-Node external addresses [/ip4/192.168.1.11/tcp/3102]
-Now listening on /ip4/192.168.1.11/tcp/3102/p2p/12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ
+Enter secret key seed: Enter p2p port: Enter api port: Generated keypair: PublicKey { publickey: Ed25519(PublicKey(compressed): 86fd68afdc53e77192eb683a2ed8166cf1a28ab6b2f9c91672723649e7c1f2) }
+Peer ID: PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3")
+Node external addresses [/ip4/192.168.1.11/tcp/3103]
+Now listening on /ip4/192.168.1.11/tcp/3103/p2p/12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3
 Received SelfPeerId request
-PeerID: "12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ"
+PeerID: "12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3"
 Attempting bootstrap to /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
 Successfully bootstrapped to /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b discovered, new: true, addresses: [/ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b]
 Connection established with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b via Dialer { address: /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b, role_override: Dialer, port_use: Reuse } (1 total)
 Successfully sent sync dag request with request id: OutboundRequestId(1)
 Identify sent to 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b on connection ConnectionId(1)
-Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/meshsub/1.2.0", "/ipfs/kad/1.0.0", "/ipfs/id/push/1.0.0", "/meshsub/1.1.0", "/ipfs/ping/1.0.0", "/ipfs/id/1.0.0", "/lemuria/rr/1", "/meshsub/1.0.0"]
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/meshsub/1.1.0", "/ipfs/id/push/1.0.0", "/meshsub/1.0.0", "/ipfs/id/1.0.0", "/meshsub/1.2.0", "/ipfs/ping/1.0.0", "/lemuria/rr/1", "/ipfs/kad/1.0.0"]
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b announced valid external address: /ip4/192.168.1.11/tcp/3100
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b subscribed to topic lemuria-zk-dag
 Kademlia query progressed: Query ID: "0"
-Discovered peer during bootstrap: PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ") (1 remaining)
+Discovered peer during bootstrap: PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3") (0 remaining)
+Bootstrap complete. Total discovered peers: 2
 Received DagSync response from PeerId("12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b") with 89002 bytes
 Decoded 9 DAG entries
-Kademlia query progressed: Query ID: "0"
-Discovered peer during bootstrap: PeerId("1AoCS3m5XKi32aKtepADLoXFHQPgYXUcHwT9reJ8cACTKT") (0 remaining)
-Bootstrap complete. Total discovered peers: 3
 Connection closed with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b: Some(IO(Custom { kind: Other, error: Error(Right(Closed)) }))

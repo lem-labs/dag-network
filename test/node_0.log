@@ -1,9 +1,48 @@
 Enter secret key seed: Enter p2p port: Enter api port: Generated keypair: PublicKey { publickey: Ed25519(PublicKey(compressed): 4b59e263b941dba922f8c2349c8eafb3f6d9c58c975475e5d78144f7d9a8fe) }
 Peer ID: PeerId("12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b")
 Node external addresses [/ip4/192.168.1.11/tcp/3100]
-
-thread 'tokio-runtime-worker' panicked at /home/zohan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/warp-0.3.7/src/server.rs:217:27:
-error binding to 0.0.0.0:9000: error creating server listener: Address already in use (os error 98)
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 Now listening on /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
-Error: JoinError::Panic(Id(18), "error binding to 0.0.0.0:9000: error creating server listener: Address already in use (os error 98)", ...)
+Received SelfPeerId request
+PeerID: "12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b"
+Initializing DAG for bootstrap node
+Contract registry-upload address: TxHash(d0d8414e591ee5d845c462c250bb2e431be1c9ba21f0506630164a1d93a660b5)
+Received SelfAddresses request
+Incoming connection: local: /ip4/192.168.1.11/tcp/3100, remote: /ip4/192.168.1.11/tcp/3101, connection_id: ConnectionId(1)
+Connection established with 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ via Listener { local_addr: /ip4/192.168.1.11/tcp/3100, send_back_addr: /ip4/192.168.1.11/tcp/3101 } (1 total)
+Unroutable peer detected: PeerId("12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ")
+Identify sent to 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ on connection ConnectionId(1)
+Peer 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ supports protocols: ["/meshsub/1.2.0", "/meshsub/1.1.0", "/meshsub/1.0.0", "/lemuria/rr/1", "/ipfs/id/1.0.0", "/ipfs/kad/1.0.0", "/ipfs/ping/1.0.0", "/ipfs/id/push/1.0.0"]
+Peer 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ announced valid external address: /ip4/192.168.1.11/tcp/3101
+Received FindNode request. Closer peers: 0
+Peer 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ subscribed to topic lemuria-zk-dag
+Received DagSync request from PeerId("12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ")
+Incoming connection: local: /ip4/192.168.1.11/tcp/3100, remote: /ip4/192.168.1.11/tcp/3102, connection_id: ConnectionId(2)
+Response sent to PeerId("12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ") (id: InboundRequestId(1))
+Received FindNode request. Closer peers: 0
+Connection established with 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ via Listener { local_addr: /ip4/192.168.1.11/tcp/3100, send_back_addr: /ip4/192.168.1.11/tcp/3102 } (1 total)
+Unroutable peer detected: PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ")
+Identify sent to 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ on connection ConnectionId(2)
+Peer 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ supports protocols: ["/meshsub/1.1.0", "/lemuria/rr/1", "/ipfs/id/push/1.0.0", "/ipfs/ping/1.0.0", "/meshsub/1.0.0", "/meshsub/1.2.0", "/ipfs/id/1.0.0", "/ipfs/kad/1.0.0"]
+Peer 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ announced valid external address: /ip4/192.168.1.11/tcp/3102
+Received FindNode request. Closer peers: 0
+Peer 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ subscribed to topic lemuria-zk-dag
+Received DagSync request from PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ")
+Incoming connection: local: /ip4/192.168.1.11/tcp/3100, remote: /ip4/192.168.1.11/tcp/3103, connection_id: ConnectionId(3)
+Response sent to PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ") (id: InboundRequestId(2))
+Received FindNode request. Closer peers: 0
+Connection established with 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 via Listener { local_addr: /ip4/192.168.1.11/tcp/3100, send_back_addr: /ip4/192.168.1.11/tcp/3103 } (1 total)
+Unroutable peer detected: PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3")
+Identify sent to 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 on connection ConnectionId(3)
+Peer 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 supports protocols: ["/ipfs/id/1.0.0", "/ipfs/ping/1.0.0", "/lemuria/rr/1", "/ipfs/id/push/1.0.0", "/meshsub/1.2.0", "/meshsub/1.1.0", "/meshsub/1.0.0", "/ipfs/kad/1.0.0"]
+Peer 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 announced valid external address: /ip4/192.168.1.11/tcp/3103
+Received FindNode request. Closer peers: 0
+Peer 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 subscribed to topic lemuria-zk-dag
+Received DagSync request from PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3")
+Response sent to PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3") (id: InboundRequestId(3))
+Sending Transaction: contract: "d0d8414e591ee5d845c462c250bb2e431be1c9ba21f0506630164a1d93a660b5", function: register, args: {}
+Adding tx TxHash(7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92)
+Transaction sent successfully with id TxHash(7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92)
+
+thread 'tokio-runtime-worker' panicked at src/event_loop.rs:519:86:
+Failed to publish transaction: MessageTooLarge
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

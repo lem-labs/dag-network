@@ -1,9 +1,25 @@
 Enter secret key seed: Enter p2p port: Enter api port: Generated keypair: PublicKey { publickey: Ed25519(PublicKey(compressed): ac7e46fc69b0d79648895b5d1efcaf8a1c42d128142f7f2d9b434c8e4119b6f) }
 Peer ID: PeerId("12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ")
 Node external addresses [/ip4/192.168.1.11/tcp/3101]
-
-thread 'tokio-runtime-worker' panicked at /home/zohan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/warp-0.3.7/src/server.rs:217:27:
-error binding to 0.0.0.0:9001: error creating server listener: Address already in use (os error 98)
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 Now listening on /ip4/192.168.1.11/tcp/3101/p2p/12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ
-Error: JoinError::Panic(Id(18), "error binding to 0.0.0.0:9001: error creating server listener: Address already in use (os error 98)", ...)
+Received SelfPeerId request
+PeerID: "12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ"
+Attempting bootstrap to /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
+Successfully bootstrapped to /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b discovered, new: true, addresses: [/ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b]
+Connection established with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b via Dialer { address: /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b, role_override: Dialer, port_use: Reuse } (1 total)
+Successfully sent sync dag request with request id: OutboundRequestId(1)
+Identify sent to 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b on connection ConnectionId(1)
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/meshsub/1.2.0", "/lemuria/rr/1", "/ipfs/ping/1.0.0", "/meshsub/1.0.0", "/ipfs/kad/1.0.0", "/ipfs/id/1.0.0", "/ipfs/id/push/1.0.0", "/meshsub/1.1.0"]
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b announced valid external address: /ip4/192.168.1.11/tcp/3100
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b subscribed to topic lemuria-zk-dag
+Kademlia query progressed: Query ID: "0"
+Discovered peer during bootstrap: PeerId("12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ") (1 remaining)
+Received DagSync response from PeerId("12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b") with 89002 bytes
+Decoded 9 DAG entries
+Kademlia query progressed: Query ID: "0"
+Discovered peer during bootstrap: PeerId("1AkLUknUq8LNqeRF12vck9dJekwfu7Bj96fhndZcbyv4Bo") (0 remaining)
+Bootstrap complete. Total discovered peers: 3
+Connection closed with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b: Some(IO(Custom { kind: Other, error: Error(Right(Closed)) }))
+Sending Transaction: contract: "7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92", function: mint, args: {"to": [0, 36, 8, 1, 18, 32, 172, 126, 70, 252, 105, 176, 215, 150, 72, 137, 91, 93, 30, 252, 175, 138, 28, 66, 209, 40, 20, 47, 7, 242, 217, 180, 52, 200, 228, 17, 155, 111], "amount": [0, 0, 0, 0, 0, 0, 3, 232]}
+Transaction failed: "Contract not found at address TxHash(7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92)"

@@ -294,7 +294,7 @@ def main(num_nodes):
         interactive_shell(api_ports, peer_ids, registry_address, bootstrap_multiaddr)
 
     except Exception as e:
-        print("\n\ud83d\udea8 Exception occurred during test execution:")
+        print("\nException occurred during test execution:")
         traceback.print_exc()
 
     finally:

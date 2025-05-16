@@ -171,13 +171,13 @@ impl Dag {
             if let Some(contract_tx) = contract_tx_option {
                 if let Ok((contract, _)) = bincode::decode_from_slice::<Contract, _>(&contract_tx.data.clone(), bincode::config::standard()) {
                     if let Some((parent_1_hash, parent_2_hash)) = self.select_parents() {
-                        // todo: get parent states, parent tx's, etc needed in vm
 
                         let parents = vec![parent_1_hash.clone(), parent_2_hash.clone()];
                         match self.execute_tx(
                             parents.clone(), contract_address, contract.clone(), contract_function, contract_args.clone(), data, peer_id, // private_key: String,
                         ) {
-                            Ok((tx_hash, mut tx_object, state_tree_path)) => {
+                            Ok((tx_hash, mut tx_object, state_path)) => {
+                                self.update_state(state_path.clone());
                                 match self.add_tx(tx_hash, tx_object.clone()) {
                                     Ok(()) => {
                                         match self.sender.send(DagEvent::Broadcast { txid: tx_hash, tx: tx_object }).await {
@@ -280,10 +280,14 @@ impl Dag {
                     peer_id.clone(),
                 ) {
                     Ok((new_state_root, state_path)) => {
-                        let data = match contract_args.clone().get("data") {
-                            Some(data) => data.clone(),
-                            None => vec![]
+
+                        let contract = Contract {
+                            bytes: data,
+                            metadata: ContractMetadata {
+                                owner: peer_id.clone(),
+                            },
                         };
+                        let contract_bytes = bincode::encode_to_vec(&contract, bincode::config::standard()).unwrap();
 
                         let tx = Transaction {
                             parents,
@@ -294,7 +298,7 @@ impl Dag {
                                 function: contract_function.clone(),
                                 args: contract_args.clone(),
                             },
-                            data,
+                            data: contract_bytes,
                             metadata: Metadata {
                                 timestamp: current_timestamp(),
                                 peer_id,
@@ -330,6 +334,7 @@ impl Dag {
         let module = match Module::from_binary(&engine, &contract.bytes) {
             Ok(m) => m,
             Err(e) => {
+                let decoded =
                 return Err(format!("WASM compile error: {}", e).into());
             }
         };
@@ -625,7 +630,6 @@ impl Dag {
         let root_hex = hex::encode(root.0);
 
         if !self.state_tree.contains_key(&TxHash(root.0)) {
-            eprintln!("ERROR: State root {} not found in state tree!", root_hex);
             return None;
         }
 
@@ -634,6 +638,7 @@ impl Dag {
 
         while let Some(current) = stack.pop() {
             let current_hex = hex::encode(current.0);
+
             match self.state_tree.get(&current) {
                 Some(node) => match node {
                     StateNode::Leaf { key, value } => {
@@ -644,7 +649,6 @@ impl Dag {
                         stack.push(TxHash(*right));
                     }
                     StateNode::Empty => {
-                        eprintln!("Empty node encountered at {}", current_hex);
                     }
                 },
                 None => {
@@ -654,12 +658,12 @@ impl Dag {
         }
 
         if result.is_empty() {
-            eprintln!("Final state for root {} is EMPTY", root_hex);
             None
         } else {
             Some(result)
         }
     }
+
 
     fn verify_parents(&mut self, parents: Vec<TxHash>) -> Result<HashMap<Vec<u8>, Vec<u8>>, Box<dyn Error + Send + Sync>> {
         if parents.len() != 2 {
