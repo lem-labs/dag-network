@@ -10,6 +10,7 @@ struct SendTxInput {
     contract: String,
     function: String,
     args: HashMap<String, Vec<u8>>,
+    data: String,
 }
 
 #[derive(Deserialize)]
@@ -48,7 +49,7 @@ struct GetFamilyInput {
 pub enum ApiEvent {
     InitDag { respond_to: oneshot::Sender<Result<(), String>> },
     Bootstrap { bootstrap_addr: String, respond_to: oneshot::Sender<Result<(), String>> },
-    SendTx { contract: String, function: String, args: HashMap<String, Vec<u8>>, respond_to: oneshot::Sender<Result<TxHash, String>> },
+    SendTx { contract: String, function: String, args: HashMap<String, Vec<u8>>, data_str: String, respond_to: oneshot::Sender<Result<TxHash, String>> },
     SyncDag { peer: String, respond_to: oneshot::Sender<Result<(), String>> },
     GetTx { tx_id: String, respond_to: oneshot::Sender<Result<TransactionWithId, String>> },
     GetTxs{ tx_ids: Vec<String>, respond_to: oneshot::Sender<Vec<TransactionWithId>> },
@@ -84,7 +85,7 @@ impl Api {
 
         let routes =
             Self::post("sendTx", sender.clone(), |input: SendTxInput, respond_to| {
-                ApiEvent::SendTx {contract: input.contract, function: input.function, args: input.args, respond_to }
+                ApiEvent::SendTx {contract: input.contract, function: input.function, args: input.args, data_str: input.data, respond_to }
             })
             .or(Self::post("bootstrap", sender.clone(), |input: MultiaddrInput, respond_to| {
                 ApiEvent::Bootstrap { bootstrap_addr: input.multiaddr, respond_to }

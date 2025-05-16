@@ -5,8 +5,8 @@ This project is a demo DAG Network. It is meant to be used as a base for further
 
 ### To Run:
 - compile lemutia-contracts:
-  - `cd lemuroa-contracts/;`
-  - `rustup target add wasm32-unknown-unknown;`
+  - `cd lemuria-contracts/`
+  - `rustup target add wasm32-unknown-unknown`
   - `cargo build --release --target wasm32-unknown-unknown` 
 
 - from project root, `cargo run` multiple node instances
@@ -20,7 +20,7 @@ This project is a demo DAG Network. It is meant to be used as a base for further
   - run `port` command to switch to the api port of `node_i`
   - run `bootstrap` command, providing the bootstrap node's multiaddr
     - can be copied from the log `Now listening on /ip4/192.168.1.11/tcp/1110/p2p/12D3KooWL4u77srLWoVh5VWLrh3a9GfUgTGES58uHNYxcVCnF2h6`
-    - example: `/ip4/192.168.1.11/tcp/1110/p2p/12D3KooWL4u77srLWoVh5VWLrh3a9GfUgTGES58uHNYxcVCnF2h6`
+    - example multiaddr: `/ip4/192.168.1.11/tcp/1110/p2p/12D3KooWL4u77srLWoVh5VWLrh3a9GfUgTGES58uHNYxcVCnF2h6`
   - run `sync-dag` to sync with bootstrap node
     - copy last portion of previous multiaddr for peer id 
     - example: `12D3KooWL4u77srLWoVh5VWLrh3a9GfUgTGES58uHNYxcVCnF2h6`

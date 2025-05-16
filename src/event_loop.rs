@@ -352,27 +352,35 @@ impl EventLoop {
                 self.dag.initialize_dag();
                 let _ = respond_to.send(Ok(()));
             }
-            ApiEvent::SendTx { contract, function, args, respond_to } => {
+            ApiEvent::SendTx { contract, function, args, data_str, respond_to } => {
                 println!("Sending Transaction: contract: {:?}, function: {}, args: {:?}", contract, function, args);
                 match TxHash::from_hex(&contract) {
                     Ok(tx_hash) => {
-                        match self.dag.tx(tx_hash, function, args, self.swarm.local_peer_id().to_string(), 0).await {
-                            Ok(tx_hash) => {
-                                println!("Transaction sent successfully with id {:?}", tx_hash);
-                                let _ = respond_to.send(Ok(tx_hash));
+                        match base64::decode(&data_str) {
+                            Ok(data) => {
+                                match self.dag.tx(tx_hash, function, args, data, self.swarm.local_peer_id().to_string(), 0).await {
+                                    Ok(tx_hash) => {
+                                        println!("Transaction sent successfully with id {:?}", tx_hash);
+                                        let _ = respond_to.send(Ok(tx_hash));
+                                    }
+                                    Err(e) => {
+                                        let error_message = format!("Transaction failed: {:?}", e);
+                                        eprintln!("{}", error_message);
+                                        let _ = respond_to.send(Err(error_message));
+                                    }
+                                }
                             }
                             Err(e) => {
-                                let error_message = format!("Transaction failed: {:?}", e);
-                                eprintln!("{}", error_message);
-                                let _ = respond_to.send(Err(error_message));
+                                let _ = respond_to.send(Err(e.to_string()));
                             }
                         }
-                    } Err(e) => {
-
+                    }
+                    Err(e) => {
+                        let _ = respond_to.send(Err(e.to_string()));
                     }
                 }
-
             }
+
             ApiEvent::SyncDag {peer, respond_to} => {
                 let peer_id = PeerId::from_str(&peer).unwrap();
                 let request = LemuriaRequest::DagSync(DagSyncRequest {});

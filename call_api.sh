@@ -32,12 +32,12 @@ read -p "Enter API port (default 3030): " port
 echo ""
 echo "Available commands:"
 printf "%-20s %-20s %-20s\n" \
-  "bootstrap"         "init-dag"          "sync-dag" \
-  "send-tx"           "get-tx"            "get-txs" \
-  "get-ancestry"      "get-peers"         "get-known-addrs" \
-  "self-peer-id"      "self-addresses"    "dial-peer" \
-  "metrics"           "dag-height"        "shutdown" \
-  "port"              "help"              "quit" \
+  "bootstrap"        "init"              "sync" \
+  "tx"               "get-tx"            "get-txs" \
+  "get-ancestry"     "get-peers"         "get-known-addrs" \
+  "self-peer-id"     "self-addresses"    "dial-peer" \
+  "metrics"          "dag-height"        "shutdown" \
+  "port"             "help"              "quit" \
 
 echo ""
 
@@ -54,24 +54,80 @@ while true; do
       read -p "Bootstrap address: " addr
       curl -X POST http://localhost:$port/bootstrap -H "Content-Type: application/json" -d "{\"multiaddr\": \"$addr\"}"
       ;;
-    init-dag)
-          curl -X GET http://localhost:$port/initDag;;
-    send-tx)
+    init)
+      curl -X GET http://localhost:$port/initDag;;
+    tx)
       read -p "Contract address: " contract
       read -p "Function name: " function
       read -p "Number of args: " n
-      args="{"
+
+      args_entries=()
+
       for ((i=0; i<n; i++)); do
         read -p "Arg $i key: " key
-        read -p "Arg $i (hex string): " val
-        bytes=$(echo "$val" | xxd -r -p | od -An -t u1 | tr -s ' ' | sed 's/^ *//' | tr ' ' ',')
-        args+="\"$key\":[$bytes]"
-        if (( i < n - 1 )); then args+=","; fi
+        read -p "Arg $i (string, base58, or hex): " val
+
+        if [[ "$val" =~ ^[0-9a-fA-F]+$ && $((${#val} % 2)) -eq 0 ]]; then
+          # HEX → binary → u8 list
+          byte_list=$(echo "$val" | xxd -r -p | od -An -t u1 | tr -s ' ' '\n' | awk '{$1=$1};1' | paste -sd, -)
+        elif [[ "$val" =~ ^1[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{10,}$ ]]; then
+          # base58 → binary → u8 list
+          if command -v base58 &>/dev/null; then
+            byte_list=$(echo "$val" | base58 -d 2>/dev/null | od -An -t u1 | tr -s ' ' '\n' | awk '{$1=$1};1' | paste -sd, -)
+          elif command -v python3 &>/dev/null; then
+            byte_list=$(python3 -c "import sys, base58; sys.stdout.buffer.write(base58.b58decode(sys.argv[1]))" "$val" 2>/dev/null | od -An -t u1 | tr -s ' ' '\n' | awk '{$1=$1};1' | paste -sd, -)
+          else
+            echo "Error: No base58 decoder found for '$val'"
+            continue
+          fi
+        else
+          # UTF-8 → binary → u8 list
+          byte_list=$(printf "%s" "$val" | od -An -t u1 | tr -s ' ' '\n' | awk '{$1=$1};1' | paste -sd, -)
+        fi
+
+        if [[ -n "$byte_list" && "$byte_list" != ","* ]]; then
+          args_entries+=("\"$key\":[$byte_list]")
+        else
+          echo "Warning: Arg '$key' is empty or invalid"
+        fi
       done
-      args+="}"
-      curl -X POST http://localhost:$port/sendTx -H "Content-Type: application/json" -d "{\"contract\": \"$contract\", \"function\": \"$function\", \"args\": $args}"
+
+      # Join entries into a proper JSON object
+      args_json=$(printf "{%s}" "$(IFS=,; echo "${args_entries[*]}")")
+
+      echo "Parsed args JSON:"
+      echo "$args_json" | jq . || { echo "Malformed JSON in args"; exit 1; }
+
+      # Read file into Vec<u8> if provided
+      read -p "Data file path (or leave empty for none): " filepath
+      if [[ -n "$filepath" && -f "$filepath" ]]; then
+        file_bytes=$(od -An -t u1 "$filepath" | tr -s ' ' '\n' | awk '{$1=$1};1' | paste -sd, -)
+        data_json="[$file_bytes]"
+      else
+        data_json="[]"
+      fi
+
+      # Build and send the JSON request
+      json=$(jq -n \
+        --arg contract "$contract" \
+        --arg function "$function" \
+        --argjson args "$args_json" \
+        --argjson data "$data_json" \
+        '{
+          contract: $contract,
+          function: $function,
+          args: $args,
+          data: $data
+        }')
+
+      echo "Sending:"
+      echo "$json" | jq .
+
+      curl -X POST "http://localhost:$port/sendTx" \
+        -H "Content-Type: application/json" \
+        -d "$json"
       ;;
-    sync-dag)
+    sync)
       read -p "Peer ID: " peer
       curl -X POST http://localhost:$port/syncDag -H "Content-Type: application/json" -d "{\"peer\": \"$peer\"}"
       ;;
