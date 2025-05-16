@@ -5,13 +5,23 @@ Now listening on /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqepo
 Received SelfPeerId request
 PeerID: "12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b"
 Initializing DAG for bootstrap node
+[collect_state_from_root] Successfully collected 1 entries from root 6567d25d06b386e47602e816bd115c01075e30e6f1e0d67d3c80181a5b21b424
+[collect_state_from_root] Successfully collected 1 entries from root 9f73400c97d1e7d6e58eb796c3257440f69af017354fd3da521f9d0e846dcea4
+[collect_state_from_root] Successfully collected 1 entries from root 9f73400c97d1e7d6e58eb796c3257440f69af017354fd3da521f9d0e846dcea4
+[collect_state_from_root] Successfully collected 1 entries from root 9f7dd3b09fab44cff31344c8e4e5da5f190b4e2abaafe7c5d37a957cb38acef2
+[collect_state_from_root] Successfully collected 1 entries from root 9f7dd3b09fab44cff31344c8e4e5da5f190b4e2abaafe7c5d37a957cb38acef2
+[collect_state_from_root] Successfully collected 1 entries from root 6567d25d06b386e47602e816bd115c01075e30e6f1e0d67d3c80181a5b21b424
+[collect_state_from_root] Successfully collected 1 entries from root 6567d25d06b386e47602e816bd115c01075e30e6f1e0d67d3c80181a5b21b424
+[collect_state_from_root] Successfully collected 1 entries from root 9f73400c97d1e7d6e58eb796c3257440f69af017354fd3da521f9d0e846dcea4
+[collect_state_from_root] Successfully collected 1 entries from root 3cb9a0013723fafa45e86c6bffdbc3734e7d78bd20418254271c7a868d72ab92
+[collect_state_from_root] Successfully collected 1 entries from root 70a36ce9cfd386c99255f0137e0ca0428c876e6a1a1fab92166fc8a788e36a2e
 Contract registry-upload address: TxHash(d0d8414e591ee5d845c462c250bb2e431be1c9ba21f0506630164a1d93a660b5)
 Received SelfAddresses request
 Incoming connection: local: /ip4/192.168.1.11/tcp/3100, remote: /ip4/192.168.1.11/tcp/3101, connection_id: ConnectionId(1)
 Connection established with 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ via Listener { local_addr: /ip4/192.168.1.11/tcp/3100, send_back_addr: /ip4/192.168.1.11/tcp/3101 } (1 total)
 Unroutable peer detected: PeerId("12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ")
 Identify sent to 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ on connection ConnectionId(1)
-Peer 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ supports protocols: ["/meshsub/1.2.0", "/meshsub/1.1.0", "/meshsub/1.0.0", "/lemuria/rr/1", "/ipfs/id/1.0.0", "/ipfs/kad/1.0.0", "/ipfs/ping/1.0.0", "/ipfs/id/push/1.0.0"]
+Peer 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ supports protocols: ["/meshsub/1.1.0", "/ipfs/id/1.0.0", "/ipfs/ping/1.0.0", "/lemuria/rr/1", "/meshsub/1.2.0", "/ipfs/kad/1.0.0", "/meshsub/1.0.0", "/ipfs/id/push/1.0.0"]
 Peer 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ announced valid external address: /ip4/192.168.1.11/tcp/3101
 Received FindNode request. Closer peers: 0
 Peer 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ subscribed to topic lemuria-zk-dag
@@ -22,27 +32,34 @@ Received FindNode request. Closer peers: 0
 Connection established with 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ via Listener { local_addr: /ip4/192.168.1.11/tcp/3100, send_back_addr: /ip4/192.168.1.11/tcp/3102 } (1 total)
 Unroutable peer detected: PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ")
 Identify sent to 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ on connection ConnectionId(2)
-Peer 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ supports protocols: ["/meshsub/1.1.0", "/lemuria/rr/1", "/ipfs/id/push/1.0.0", "/ipfs/ping/1.0.0", "/meshsub/1.0.0", "/meshsub/1.2.0", "/ipfs/id/1.0.0", "/ipfs/kad/1.0.0"]
+Peer 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ supports protocols: ["/ipfs/id/1.0.0", "/ipfs/id/push/1.0.0", "/meshsub/1.1.0", "/meshsub/1.0.0", "/lemuria/rr/1", "/ipfs/ping/1.0.0", "/meshsub/1.2.0", "/ipfs/kad/1.0.0"]
 Peer 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ announced valid external address: /ip4/192.168.1.11/tcp/3102
 Received FindNode request. Closer peers: 0
 Peer 12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ subscribed to topic lemuria-zk-dag
 Received DagSync request from PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ")
-Incoming connection: local: /ip4/192.168.1.11/tcp/3100, remote: /ip4/192.168.1.11/tcp/3103, connection_id: ConnectionId(3)
 Response sent to PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ") (id: InboundRequestId(2))
+Incoming connection: local: /ip4/192.168.1.11/tcp/3100, remote: /ip4/192.168.1.11/tcp/3103, connection_id: ConnectionId(3)
 Received FindNode request. Closer peers: 0
 Connection established with 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 via Listener { local_addr: /ip4/192.168.1.11/tcp/3100, send_back_addr: /ip4/192.168.1.11/tcp/3103 } (1 total)
 Unroutable peer detected: PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3")
 Identify sent to 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 on connection ConnectionId(3)
-Peer 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 supports protocols: ["/ipfs/id/1.0.0", "/ipfs/ping/1.0.0", "/lemuria/rr/1", "/ipfs/id/push/1.0.0", "/meshsub/1.2.0", "/meshsub/1.1.0", "/meshsub/1.0.0", "/ipfs/kad/1.0.0"]
+Peer 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 supports protocols: ["/ipfs/id/1.0.0", "/ipfs/id/push/1.0.0", "/meshsub/1.2.0", "/meshsub/1.1.0", "/lemuria/rr/1", "/ipfs/kad/1.0.0", "/ipfs/ping/1.0.0", "/meshsub/1.0.0"]
 Peer 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 announced valid external address: /ip4/192.168.1.11/tcp/3103
 Received FindNode request. Closer peers: 0
 Peer 12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3 subscribed to topic lemuria-zk-dag
 Received DagSync request from PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3")
 Response sent to PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh51SrDqeS1BbhPD3") (id: InboundRequestId(3))
 Sending Transaction: contract: "d0d8414e591ee5d845c462c250bb2e431be1c9ba21f0506630164a1d93a660b5", function: register, args: {}
-Adding tx TxHash(7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92)
-Transaction sent successfully with id TxHash(7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92)
-
-thread 'tokio-runtime-worker' panicked at src/event_loop.rs:519:86:
-Failed to publish transaction: MessageTooLarge
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[collect_state_from_root] Successfully collected 1 entries from root 612377cb0084f4a622d3fe6f59576440ea00c1bee104fbd69c6ed863652d349b
+[collect_state_from_root] Successfully collected 1 entries from root abeb48ba33a0aae090dad7ce96c311fe072a4f39a627728b469467152e835025
+[run_contract] Result length prefix (bytes): [4a, 0, 0, 0]
+[run_contract] Declared result length: 74
+[run_contract] Full result buffer size: 78
+[run_contract] Raw result_data (74 bytes): [1, 7, 61, 64, 64, 72, 65, 73, 73, 40, 62, 31, 35, 33, 65, 32, 37, 35, 34, 39, 37, 31, 61, 30, 37, 36, 61, 30, 39, 33, 30, 39, 32, 61, 64, 66, 31, 33, 65, 63, 61, 32, 66, 65, 66, 33, 36, 35, 37, 64, 34, 38, 62, 30, 64, 38, 66, 31, 64, 64, 30, 34, 35, 31]
+Adding tx TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Transaction sent successfully with id TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Received message
+  from: 12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2eni2MPP5aqKoiAJ
+  message_id: 3137343537343435323532333035333831313338
+Adding tx TxHash(994908d948527ec3bf2780104ceef9b6671fc577375c2e243697beee61390847)
+Transaction added to dag: TxHash(994908d948527ec3bf2780104ceef9b6671fc577375c2e243697beee61390847)

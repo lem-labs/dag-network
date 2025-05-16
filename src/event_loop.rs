@@ -12,8 +12,8 @@ use libp2p::swarm::SwarmEvent;
 use libp2p::{gossipsub, identify, kad, ping, Multiaddr, PeerId, Swarm};
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use base64::Engine;
 use tokio::sync::mpsc::Receiver;
-use tracing_subscriber::fmt::format;
 
 pub struct EventLoop {
     swarm: Swarm<LemuriaBehaviour>,
@@ -356,7 +356,7 @@ impl EventLoop {
                 println!("Sending Transaction: contract: {:?}, function: {}, args: {:?}", contract, function, args);
                 match TxHash::from_hex(&contract) {
                     Ok(tx_hash) => {
-                        match base64::decode(&data_str) {
+                        match base64::engine::general_purpose::STANDARD.decode(&data_str) {
                             Ok(data) => {
                                 match self.dag.tx(tx_hash, function, args, data, self.swarm.local_peer_id().to_string(), 0).await {
                                     Ok(tx_hash) => {

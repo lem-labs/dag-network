@@ -10,7 +10,7 @@ Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b discovered, new: true,
 Connection established with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b via Dialer { address: /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b, role_override: Dialer, port_use: Reuse } (1 total)
 Successfully sent sync dag request with request id: OutboundRequestId(1)
 Identify sent to 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b on connection ConnectionId(1)
-Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/meshsub/1.2.0", "/ipfs/kad/1.0.0", "/ipfs/id/push/1.0.0", "/meshsub/1.1.0", "/ipfs/ping/1.0.0", "/ipfs/id/1.0.0", "/lemuria/rr/1", "/meshsub/1.0.0"]
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/ipfs/id/1.0.0", "/meshsub/1.2.0", "/ipfs/id/push/1.0.0", "/ipfs/kad/1.0.0", "/meshsub/1.0.0", "/lemuria/rr/1", "/meshsub/1.1.0", "/ipfs/ping/1.0.0"]
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b announced valid external address: /ip4/192.168.1.11/tcp/3100
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b subscribed to topic lemuria-zk-dag
 Kademlia query progressed: Query ID: "0"
@@ -18,6 +18,24 @@ Discovered peer during bootstrap: PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9b
 Received DagSync response from PeerId("12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b") with 89002 bytes
 Decoded 9 DAG entries
 Kademlia query progressed: Query ID: "0"
-Discovered peer during bootstrap: PeerId("1AoCS3m5XKi32aKtepADLoXFHQPgYXUcHwT9reJ8cACTKT") (0 remaining)
+Discovered peer during bootstrap: PeerId("1AXCD9PkhaesYRnWSK258mDRa2cbSKCnQ7HUHx3iQaKEiM") (0 remaining)
 Bootstrap complete. Total discovered peers: 3
-Connection closed with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b: Some(IO(Custom { kind: Other, error: Error(Right(Closed)) }))
+Received message
+  from: 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
+  message_id: 31323930393136333638373432333430373836
+Adding tx TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Transaction added to dag: TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Received message
+  from: 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
+  message_id: 3137343537343435323532333035333831313338
+Adding tx TxHash(994908d948527ec3bf2780104ceef9b6671fc577375c2e243697beee61390847)
+Transaction added to dag: TxHash(994908d948527ec3bf2780104ceef9b6671fc577375c2e243697beee61390847)
+Sending Transaction: contract: "63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac", function: transfer, args: {"amount": [50, 0, 0, 0, 0, 0, 0, 0], "to": [0, 36, 8, 1, 18, 32, 206, 68, 213, 33, 171, 228, 164, 182, 194, 214, 245, 224, 45, 112, 235, 211, 217, 227, 215, 237, 242, 71, 18, 40, 237, 159, 127, 153, 90, 89, 9, 162]}
+[collect_state_from_root] Successfully collected 1 entries from root d54a23403c23fad17bdfe6b3e050d72bddcea8636f832cd3db8538e9f29f1b0b
+[collect_state_from_root] Successfully collected 1 entries from root 70a36ce9cfd386c99255f0137e0ca0428c876e6a1a1fab92166fc8a788e36a2e
+[run_contract] Result length prefix (bytes): [14, 0, 0, 0]
+[run_contract] Declared result length: 20
+[run_contract] Full result buffer size: 24
+[run_contract] Raw result_data (20 bytes): [49, 6e, 73, 75, 66, 66, 69, 63, 69, 65, 6e, 74, 20, 62, 61, 6c, 61, 6e, 63, 65]
+[run_contract] Bincode deserialization failed: UnexpectedEnd { additional: 92 }
+Transaction failed: "Result deserialization failed: UnexpectedEnd { additional: 92 }"

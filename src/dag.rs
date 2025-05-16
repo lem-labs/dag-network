@@ -1,14 +1,13 @@
+use anyhow::Result;
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::hash::Hasher;
 use std::fmt;
 use std::sync::{Arc, Mutex};
-use wasmtime::{Engine, Store, Module, Instance, Linker, TypedFunc, Caller};
-use anyhow::Result;
-use std::cell::RefCell;
+use wasmtime::{Caller, Engine, Linker, Module, Store, TypedFunc};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub enum DagEvent {
     Broadcast { txid: TxHash, tx: Transaction }
@@ -136,7 +135,7 @@ pub struct Dag {
 impl Dag {
 
     pub fn new(sender: tokio::sync::mpsc::Sender<DagEvent>) -> Self {
-        let mut ledger = Self {
+        let ledger = Self {
             transactions: HashMap::new(),
             tips_children: HashMap::new(),
             state_tree: HashMap::new(),
@@ -164,7 +163,7 @@ impl Dag {
         peer_id: String,
         retry: u8,
 
-    ) -> Result<(TxHash), Box<dyn Error + Send + Sync>> {
+    ) -> Result<TxHash, Box<dyn Error + Send + Sync>> {
         if retry < 8 {
             let cloned_transactions = self.transactions.clone();
             let contract_tx_option = cloned_transactions.get(&contract_address);
@@ -176,7 +175,7 @@ impl Dag {
                         match self.execute_tx(
                             parents.clone(), contract_address, contract.clone(), contract_function, contract_args.clone(), data, peer_id, // private_key: String,
                         ) {
-                            Ok((tx_hash, mut tx_object, state_path)) => {
+                            Ok((tx_hash, tx_object, state_path)) => {
                                 self.update_state(state_path.clone());
                                 match self.add_tx(tx_hash, tx_object.clone()) {
                                     Ok(()) => {
@@ -334,7 +333,6 @@ impl Dag {
         let module = match Module::from_binary(&engine, &contract.bytes) {
             Ok(m) => m,
             Err(e) => {
-                let decoded =
                 return Err(format!("WASM compile error: {}", e).into());
             }
         };
@@ -447,6 +445,7 @@ impl Dag {
         contract_args.insert("caller".to_string(), peer_id.as_bytes().to_vec());
         contract_args.insert("upload_data".to_string(), data.clone());
 
+
         // Encode arguments
         let input_bytes = match bincode::encode_to_vec(&contract_args, bincode::config::standard()) {
             Ok(b) => b,
@@ -485,14 +484,45 @@ impl Dag {
             return Err("Failed to read result payload".into());
         }
 
-        let result_len = u32::from_le_bytes(result_buf[..4].try_into().unwrap()) as usize;
+        // let result_len = u32::from_le_bytes(result_buf[..4].try_into().unwrap()) as usize;
+        // let result_data = &result_buf[4..4 + result_len];
+        //
+        //
+        // // Parse state diff from output
+        // let updates: HashMap<Vec<u8>, Vec<u8>> = match bincode::decode_from_slice(result_data, bincode::config::standard()) {
+        //     Ok((v, _)) => v,
+        //     Err(e) => {
+        //         return Err(format!("Result deserialization failed: {}", e).into());
+        //     }
+        // };
+
+        let result_len_bytes = &result_buf[..4];
+        let result_len = u32::from_le_bytes(result_len_bytes.try_into().unwrap()) as usize;
+
+        eprintln!("[run_contract] Result length prefix (bytes): {:x?}", result_len_bytes);
+        eprintln!("[run_contract] Declared result length: {}", result_len);
+        eprintln!("[run_contract] Full result buffer size: {}", result_buf.len());
+
+        if result_buf.len() < 4 + result_len {
+            return Err(format!(
+                "Result buffer too short: expected {} bytes after length prefix, but only got {}",
+                result_len,
+                result_buf.len() - 4
+            ).into());
+        }
+
         let result_data = &result_buf[4..4 + result_len];
 
+        eprintln!(
+            "[run_contract] Raw result_data ({} bytes): {:x?}",
+            result_data.len(),
+            &result_data[..std::cmp::min(64, result_data.len())] // print only first 64 bytes
+        );
 
-        // Parse state diff from output
         let updates: HashMap<Vec<u8>, Vec<u8>> = match bincode::decode_from_slice(result_data, bincode::config::standard()) {
             Ok((v, _)) => v,
             Err(e) => {
+                eprintln!("[run_contract] Bincode deserialization failed: {}", e);
                 return Err(format!("Result deserialization failed: {}", e).into());
             }
         };
@@ -533,8 +563,8 @@ impl Dag {
             100 - dt.min(100)
         };
 
-        let mut ancestry1 = self.get_ancestry(&self.hash_tx(tx1), 3);
-        let mut ancestry2 = self.get_ancestry(&self.hash_tx(tx2), 3);
+        let ancestry1 = self.get_ancestry(&self.hash_tx(tx1), 3);
+        let ancestry2 = self.get_ancestry(&self.hash_tx(tx2), 3);
 
         let overlap = ancestry1.intersection(&ancestry2).count() as u64;
         let diversity = 100 - overlap;
@@ -620,6 +650,7 @@ impl Dag {
     }
 
     pub fn apply_state_diff(&mut self, updates: HashMap<Vec<u8>, Vec<u8>>) -> (StateHash, Vec<StateNode>) {
+        // print!("APPLYING STATE DIFF \n");
         let (root, path) = self.build_merkle_tree(updates);
         self.update_state(path.clone());
         (root, path)
@@ -640,29 +671,42 @@ impl Dag {
             let current_hex = hex::encode(current.0);
 
             match self.state_tree.get(&current) {
-                Some(node) => match node {
-                    StateNode::Leaf { key, value } => {
-                        result.insert(key.clone(), value.clone());
+                Some(node) => {
+                    match node {
+                        StateNode::Leaf { key, value } => {
+
+                            result.insert(key.clone(), value.clone());
+                        }
+                        StateNode::Branch { left, right } => {
+
+                            stack.push(TxHash(*left));
+                            stack.push(TxHash(*right));
+                        }
+                        StateNode::Empty => {
+                        }
                     }
-                    StateNode::Branch { left, right } => {
-                        stack.push(TxHash(*left));
-                        stack.push(TxHash(*right));
-                    }
-                    StateNode::Empty => {
-                    }
-                },
+                }
                 None => {
-                    eprintln!("ERROR: Missing state node with hash {}", current_hex);
                 }
             }
         }
 
         if result.is_empty() {
+            eprintln!(
+                "[collect_state_from_root] WARNING: No state entries found for root {}",
+                root_hex
+            );
             None
         } else {
+            eprintln!(
+                "[collect_state_from_root] Successfully collected {} entries from root {}",
+                result.len(),
+                root_hex
+            );
             Some(result)
         }
     }
+
 
 
     fn verify_parents(&mut self, parents: Vec<TxHash>) -> Result<HashMap<Vec<u8>, Vec<u8>>, Box<dyn Error + Send + Sync>> {
@@ -789,7 +833,7 @@ impl Dag {
 
         // --- Layer 1: Genesis ---
         let genesis_hash = TxHash::from_string("genesis");
-        let (genesis_root, genesis_path) = self.apply_state_diff(HashMap::new());
+        let (genesis_root, _genesis_path) = self.apply_state_diff(HashMap::new());
 
         let genesis_tx = Transaction {
             parents: vec![],
@@ -816,7 +860,7 @@ impl Dag {
         for i in 0..3 {
             let label = format!("l2-{}", i);
             let updates = HashMap::from([(label.as_bytes().to_vec(), b"layer2".to_vec())]);
-            let (new_state_root, path) = self.apply_state_diff(updates);
+            let (new_state_root, _path) = self.apply_state_diff(updates);
 
             let hash = TxHash::from_string(&label);
             let tx = Transaction {
@@ -852,7 +896,7 @@ impl Dag {
             self.update_state(merged_path.clone());
 
             let updates = HashMap::from([(label.as_bytes().to_vec(), b"layer3".to_vec())]);
-            let (new_state_root, path) = self.apply_state_diff(updates);
+            let (new_state_root, _path) = self.apply_state_diff(updates);
 
             let hash = TxHash::from_string(&label);
 
@@ -917,7 +961,7 @@ impl Dag {
             let updates = HashMap::from([(label.as_bytes().to_vec(), tag.as_bytes().to_vec())]);
             let (merged_root, merged_path) = self.merge_parent_states(selected_parents.clone());
             self.update_state(merged_path);
-            let (new_state_root, path) = self.apply_state_diff(updates);
+            let (new_state_root, _path) = self.apply_state_diff(updates);
 
             let hash = TxHash::from_string(label);
             println!("Contract {} address: {:?}", label, hash);
@@ -986,9 +1030,6 @@ impl Dag {
     }
 
 }
-
-use std::time::{SystemTime, UNIX_EPOCH};
-use serde::__private::de::IdentifierDeserializer;
 
 fn current_timestamp() -> u64 {
     SystemTime::now()

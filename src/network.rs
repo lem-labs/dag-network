@@ -1,20 +1,19 @@
 use crate::api::ApiEvent;
 use crate::event_loop::EventLoop;
+use async_trait::async_trait;
+use bincode::{Decode, Encode};
 use ed25519_dalek::SigningKey;
-use libp2p::{gossipsub, identify, request_response, identity::ed25519, identity::Keypair, kad, noise, ping, swarm::NetworkBehaviour, tcp, yamux, Multiaddr, Swarm, SwarmBuilder};
+use futures::prelude::*;
+use libp2p::request_response::Codec;
 use libp2p::request_response::{Behaviour as RequestResponseBehaviour, Config as RequestResponseConfig, ProtocolSupport};
+use libp2p::{gossipsub, identify, identity::ed25519, identity::Keypair, kad, noise, ping, swarm::NetworkBehaviour, tcp, yamux, Multiaddr, Swarm, SwarmBuilder};
 use local_ip_address::local_ip;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::io;
 use std::time::Duration;
 use std::{error::Error, hash::{DefaultHasher, Hash, Hasher}};
 use tokio::sync::mpsc;
-use serde::{Serialize, Deserialize};
-use std::io;
-use async_trait::async_trait;
-use bincode::{Decode, Encode};
-use libp2p::request_response::Codec;
-use futures::prelude::*;
-use crate::dag::TxHash;
 
 #[derive(NetworkBehaviour)]
 pub struct LemuriaBehaviour {
@@ -103,6 +102,7 @@ fn create_behaviour(key: &Keypair) ->Result<LemuriaBehaviour, tokio::io::Error> 
     let gossipsub_config = gossipsub::ConfigBuilder::default()
         .heartbeat_interval(Duration::from_secs(10)) // This is set to aid debugging by not cluttering the log space
         .validation_mode(gossipsub::ValidationMode::Strict) // This sets the kind of message validation. The default is Strict (enforce message signing)
+        .max_transmit_size(10 * 1024 * 1024) // TODO: decrease 10 MB size after file storage working
         .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
         .build()
         .map_err(|msg| tokio::io::Error::new(tokio::io::ErrorKind::Other, msg))?; // Temporary hack because `build` does not return a proper `std::error::Error`.
@@ -122,6 +122,7 @@ fn create_behaviour(key: &Keypair) ->Result<LemuriaBehaviour, tokio::io::Error> 
     let identify = identify::Behaviour::new(identify::Config::new("/lemuria/id/1.0.0".into(), key.public()));
 
     let protocols = std::iter::once((LemuriaProtocol, ProtocolSupport::Full));
+
     let rr = RequestResponseBehaviour::<LemuriaCodec>::new(protocols, RequestResponseConfig::default());
 
     Ok(LemuriaBehaviour { ping, gossipsub, identify, kademlia, rr})
@@ -197,4 +198,5 @@ impl Codec for LemuriaCodec {
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         io.write_all(&bytes).await
     }
+
 }

@@ -14,6 +14,7 @@ import shlex
 import readline
 import base58
 
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 WASM_PATH = PROJECT_ROOT / "lemuria-contracts/target/wasm32-unknown-unknown/release/token.wasm"
 APP_BINARY = PROJECT_ROOT / "target/release/dag-network"
@@ -219,8 +220,6 @@ def main(num_nodes):
             "args": {},
             "data": encoded
         })
-        print("TOKEN DEPLOY RESULT: ")
-        print(tx_result)
         token_address = tx_result.get("Ok")
         if not token_address:
             print("Error deploying token contract")
@@ -230,7 +229,7 @@ def main(num_nodes):
         print(f"Token contract address: {token_address}")
 
         peer_bytes = list(base58.b58decode(peer_ids[1]))
-        amount_bytes = list((1000).to_bytes(8, byteorder='big'))
+        amount_bytes = list((1000).to_bytes(8, byteorder='little'))
         print("Minting tokens...")
         tx_result = call(api_ports[1], "send-tx", json_data={
             "contract": token_address,
@@ -247,7 +246,7 @@ def main(num_nodes):
 
 
         amount_each = 1000 // num_nodes
-        amount_bytes = list((amount_each).to_bytes(8, byteorder='big'))
+        amount_bytes = list(amount_each.to_bytes(8, byteorder='little'))
         print(f"Distributing {amount_each} tokens to each node...")
         for i in range(num_nodes):
             if i != 1:
@@ -266,7 +265,7 @@ def main(num_nodes):
 
         print("Simulating token transfers...")
         peer_bytes = list(base58.b58decode(peer_ids[2]))
-        amount_bytes = list((amount_each // 5).to_bytes(8, byteorder='big'))
+        amount_bytes = list((amount_each // 5).to_bytes(8, byteorder='little'))
         call(api_ports[2], "send-tx", json_data={
             "contract": token_address,
             "function": "transfer",
@@ -275,7 +274,7 @@ def main(num_nodes):
         })
 
         peer_bytes = list(base58.b58decode(peer_ids[2]))
-        amount_bytes = list((amount_each // 4).to_bytes(8, byteorder='big'))
+        amount_bytes = list((amount_each // 4).to_bytes(8, byteorder='little'))
         call(api_ports[3 % num_nodes], "send-tx", json_data={
             "contract": token_address,
             "function": "transfer",

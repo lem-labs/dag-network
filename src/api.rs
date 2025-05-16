@@ -1,7 +1,6 @@
-use std::collections::{HashMap, HashSet};
 use crate::dag::{TransactionWithId, TxHash};
-use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use tokio::sync::{mpsc, oneshot};
 use warp::{Filter, Rejection, Reply};
 

@@ -10,7 +10,7 @@ Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b discovered, new: true,
 Connection established with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b via Dialer { address: /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b, role_override: Dialer, port_use: Reuse } (1 total)
 Successfully sent sync dag request with request id: OutboundRequestId(1)
 Identify sent to 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b on connection ConnectionId(1)
-Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/meshsub/1.1.0", "/ipfs/id/push/1.0.0", "/meshsub/1.0.0", "/ipfs/id/1.0.0", "/meshsub/1.2.0", "/ipfs/ping/1.0.0", "/lemuria/rr/1", "/ipfs/kad/1.0.0"]
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/lemuria/rr/1", "/meshsub/1.2.0", "/ipfs/id/1.0.0", "/ipfs/id/push/1.0.0", "/meshsub/1.0.0", "/ipfs/kad/1.0.0", "/ipfs/ping/1.0.0", "/meshsub/1.1.0"]
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b announced valid external address: /ip4/192.168.1.11/tcp/3100
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b subscribed to topic lemuria-zk-dag
 Kademlia query progressed: Query ID: "0"
@@ -18,4 +18,16 @@ Discovered peer during bootstrap: PeerId("12D3KooWJuJv7DAL8twPuAN8hcJ3fgRphGTRh5
 Bootstrap complete. Total discovered peers: 2
 Received DagSync response from PeerId("12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b") with 89002 bytes
 Decoded 9 DAG entries
-Connection closed with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b: Some(IO(Custom { kind: Other, error: Error(Right(Closed)) }))
+Received message
+  from: 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
+  message_id: 31323930393136333638373432333430373836
+Adding tx TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Transaction added to dag: TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Received message
+  from: 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
+  message_id: 3137343537343435323532333035333831313338
+Adding tx TxHash(994908d948527ec3bf2780104ceef9b6671fc577375c2e243697beee61390847)
+Error adding transaction: "Transaction ID does not match computed hash"
+Sending Transaction: contract: "63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac", function: transfer, args: {"amount": [62, 0, 0, 0, 0, 0, 0, 0], "to": [0, 36, 8, 1, 18, 32, 206, 68, 213, 33, 171, 228, 164, 182, 194, 214, 245, 224, 45, 112, 235, 211, 217, 227, 215, 237, 242, 71, 18, 40, 237, 159, 127, 153, 90, 89, 9, 162]}
+[collect_state_from_root] Successfully collected 1 entries from root abeb48ba33a0aae090dad7ce96c311fe072a4f39a627728b469467152e835025
+Transaction failed: "Failed to collect state from parent TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)"

@@ -10,7 +10,7 @@ Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b discovered, new: true,
 Connection established with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b via Dialer { address: /ip4/192.168.1.11/tcp/3100/p2p/12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b, role_override: Dialer, port_use: Reuse } (1 total)
 Successfully sent sync dag request with request id: OutboundRequestId(1)
 Identify sent to 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b on connection ConnectionId(1)
-Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/meshsub/1.2.0", "/lemuria/rr/1", "/ipfs/ping/1.0.0", "/meshsub/1.0.0", "/ipfs/kad/1.0.0", "/ipfs/id/1.0.0", "/ipfs/id/push/1.0.0", "/meshsub/1.1.0"]
+Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b supports protocols: ["/ipfs/kad/1.0.0", "/ipfs/id/push/1.0.0", "/ipfs/ping/1.0.0", "/meshsub/1.0.0", "/ipfs/id/1.0.0", "/meshsub/1.1.0", "/meshsub/1.2.0", "/lemuria/rr/1"]
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b announced valid external address: /ip4/192.168.1.11/tcp/3100
 Peer 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b subscribed to topic lemuria-zk-dag
 Kademlia query progressed: Query ID: "0"
@@ -18,8 +18,46 @@ Discovered peer during bootstrap: PeerId("12D3KooWMRhyPm7UCRDxprrRr1qWVbii5V4V2e
 Received DagSync response from PeerId("12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b") with 89002 bytes
 Decoded 9 DAG entries
 Kademlia query progressed: Query ID: "0"
-Discovered peer during bootstrap: PeerId("1AkLUknUq8LNqeRF12vck9dJekwfu7Bj96fhndZcbyv4Bo") (0 remaining)
+Discovered peer during bootstrap: PeerId("1AiixB2Mvi9VUna79mnPqEGi5ngNuz8q2pHd3Pmu9sZE58") (0 remaining)
 Bootstrap complete. Total discovered peers: 3
-Connection closed with 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b: Some(IO(Custom { kind: Other, error: Error(Right(Closed)) }))
-Sending Transaction: contract: "7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92", function: mint, args: {"to": [0, 36, 8, 1, 18, 32, 172, 126, 70, 252, 105, 176, 215, 150, 72, 137, 91, 93, 30, 252, 175, 138, 28, 66, 209, 40, 20, 47, 7, 242, 217, 180, 52, 200, 228, 17, 155, 111], "amount": [0, 0, 0, 0, 0, 0, 3, 232]}
-Transaction failed: "Contract not found at address TxHash(7d34fa8ec4ff00e14a7552067cf427a1fc9bc20b7fb3791471725414a00b5b92)"
+Received message
+  from: 12D3KooWEtWEtdheroVnbWCz5FZfqeporqFbt52Ss1Yn14z6CC5b
+  message_id: 31323930393136333638373432333430373836
+Adding tx TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Transaction added to dag: TxHash(63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac)
+Sending Transaction: contract: "63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac", function: mint, args: {"amount": [232, 3, 0, 0, 0, 0, 0, 0], "to": [0, 36, 8, 1, 18, 32, 172, 126, 70, 252, 105, 176, 215, 150, 72, 137, 91, 93, 30, 252, 175, 138, 28, 66, 209, 40, 20, 47, 7, 242, 217, 180, 52, 200, 228, 17, 155, 111]}
+[collect_state_from_root] Successfully collected 1 entries from root abeb48ba33a0aae090dad7ce96c311fe072a4f39a627728b469467152e835025
+[collect_state_from_root] Successfully collected 1 entries from root 3cb9a0013723fafa45e86c6bffdbc3734e7d78bd20418254271c7a868d72ab92
+[run_contract] Result length prefix (bytes): [4f, 0, 0, 0]
+[run_contract] Declared result length: 79
+[run_contract] Full result buffer size: 83
+[run_contract] Raw result_data (79 bytes): [2, c, 74, 6f, 74, 61, 6c, 5f, 73, 75, 70, 70, 6c, 79, 8, e8, 3, 0, 0, 0, 0, 0, 0, 2e, 62, 61, 6c, 61, 6e, 63, 65, 3a, 0, 24, 8, 1, 12, 20, ac, 7e, 46, fc, 69, b0, d7, 96, 48, 89, 5b, 5d, 1e, fc, af, 8a, 1c, 42, d1, 28, 14, 2f, 7, f2, d9, b4]
+Adding tx TxHash(994908d948527ec3bf2780104ceef9b6671fc577375c2e243697beee61390847)
+Transaction sent successfully with id TxHash(994908d948527ec3bf2780104ceef9b6671fc577375c2e243697beee61390847)
+Sending Transaction: contract: "63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac", function: transfer, args: {"to": [0, 36, 8, 1, 18, 32, 75, 89, 226, 99, 185, 65, 219, 169, 34, 248, 194, 52, 156, 142, 175, 179, 246, 13, 156, 88, 201, 117, 4, 117, 229, 215, 129, 68, 247, 217, 168, 254], "amount": [250, 0, 0, 0, 0, 0, 0, 0]}
+[collect_state_from_root] Successfully collected 1 entries from root 70a36ce9cfd386c99255f0137e0ca0428c876e6a1a1fab92166fc8a788e36a2e
+[collect_state_from_root] Successfully collected 1 entries from root d54a23403c23fad17bdfe6b3e050d72bddcea8636f832cd3db8538e9f29f1b0b
+[run_contract] Result length prefix (bytes): [14, 0, 0, 0]
+[run_contract] Declared result length: 20
+[run_contract] Full result buffer size: 24
+[run_contract] Raw result_data (20 bytes): [49, 6e, 73, 75, 66, 66, 69, 63, 69, 65, 6e, 74, 20, 62, 61, 6c, 61, 6e, 63, 65]
+[run_contract] Bincode deserialization failed: UnexpectedEnd { additional: 92 }
+Transaction failed: "Result deserialization failed: UnexpectedEnd { additional: 92 }"
+Sending Transaction: contract: "63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac", function: transfer, args: {"to": [0, 36, 8, 1, 18, 32, 206, 68, 213, 33, 171, 228, 164, 182, 194, 214, 245, 224, 45, 112, 235, 211, 217, 227, 215, 237, 242, 71, 18, 40, 237, 159, 127, 153, 90, 89, 9, 162], "amount": [250, 0, 0, 0, 0, 0, 0, 0]}
+[collect_state_from_root] Successfully collected 1 entries from root 70a36ce9cfd386c99255f0137e0ca0428c876e6a1a1fab92166fc8a788e36a2e
+[collect_state_from_root] Successfully collected 1 entries from root d54a23403c23fad17bdfe6b3e050d72bddcea8636f832cd3db8538e9f29f1b0b
+[run_contract] Result length prefix (bytes): [14, 0, 0, 0]
+[run_contract] Declared result length: 20
+[run_contract] Full result buffer size: 24
+[run_contract] Raw result_data (20 bytes): [49, 6e, 73, 75, 66, 66, 69, 63, 69, 65, 6e, 74, 20, 62, 61, 6c, 61, 6e, 63, 65]
+[run_contract] Bincode deserialization failed: UnexpectedEnd { additional: 92 }
+Transaction failed: "Result deserialization failed: UnexpectedEnd { additional: 92 }"
+Sending Transaction: contract: "63771838e2adeb57e69569356bcb8ada30ae3d66d5ec0eb3d5581a225727e9ac", function: transfer, args: {"to": [0, 36, 8, 1, 18, 32, 134, 253, 104, 175, 220, 83, 231, 113, 146, 235, 104, 58, 46, 216, 22, 108, 241, 162, 138, 182, 178, 249, 201, 22, 114, 114, 54, 73, 14, 124, 1, 242], "amount": [250, 0, 0, 0, 0, 0, 0, 0]}
+[collect_state_from_root] Successfully collected 1 entries from root 70a36ce9cfd386c99255f0137e0ca0428c876e6a1a1fab92166fc8a788e36a2e
+[collect_state_from_root] Successfully collected 1 entries from root d54a23403c23fad17bdfe6b3e050d72bddcea8636f832cd3db8538e9f29f1b0b
+[run_contract] Result length prefix (bytes): [14, 0, 0, 0]
+[run_contract] Declared result length: 20
+[run_contract] Full result buffer size: 24
+[run_contract] Raw result_data (20 bytes): [49, 6e, 73, 75, 66, 66, 69, 63, 69, 65, 6e, 74, 20, 62, 61, 6c, 61, 6e, 63, 65]
+[run_contract] Bincode deserialization failed: UnexpectedEnd { additional: 92 }
+Transaction failed: "Result deserialization failed: UnexpectedEnd { additional: 92 }"
