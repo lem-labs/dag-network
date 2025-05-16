@@ -15,18 +15,9 @@ struct ContractMetadata {
 }
 
 extern "C" {
-    fn read_tx_data(offset: i32, length: i32) -> i32;
     fn read_state(offset_ptr: i32, key_ptr: i32, key_len: i32) -> i32;
     fn write_state(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32);
     fn write_output(ptr: i32, len: i32) -> i32;
-}
-
-fn get_tx_data() -> Vec<u8> {
-    let mut buf = vec![0u8; 4096];
-    let ptr = buf.as_mut_ptr() as i32;
-    let len = buf.len() as i32;
-    let actual_len = unsafe { read_tx_data(ptr, len) };
-    unsafe { Vec::from(std::slice::from_raw_parts(ptr as *const u8, actual_len as usize)) }
 }
 
 fn read_key(key: &[u8]) -> Option<Vec<u8>> {
@@ -59,23 +50,23 @@ pub extern "C" fn register(ptr: i32, len: i32) -> i32 {
     let input_bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, len as usize) };
     let (args, _): (HashMap<String, Vec<u8>>, _) = decode_from_slice(input_bytes, bincode::config::standard()).unwrap();
 
-    let owner = args.get("owner").expect("Missing owner").clone();
-    let tx_data = get_tx_data();
+    let caller = args.get("caller").expect("Missing caller").clone();
+    let data_to_upload = args.get("upload_data").expect("Missing upload data").clone();
 
     // Compute contract address
-    let hash = Sha256::digest(&tx_data);
+    let hash = Sha256::digest(&data_to_upload);
     let address = hash.to_vec();
 
     // Check for duplicate
     if read_key(&address).is_some() {
-        panic!("Contract already exists at this address");
+        panic!("File already exists at this address");
     }
 
     // Build contract object
     let contract = Contract {
-        bytes: tx_data,
+        bytes: data_to_upload,
         metadata: ContractMetadata {
-            owner: String::from_utf8(owner).unwrap(),
+            owner: String::from_utf8(caller).unwrap(),
         },
     };
 

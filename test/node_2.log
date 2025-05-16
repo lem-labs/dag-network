@@ -1,0 +1,9 @@
+Enter secret key seed: Enter p2p port: Enter api port: Generated keypair: PublicKey { publickey: Ed25519(PublicKey(compressed): ce44d521abe4a4b6c2d6f5e02d70ebd3d9e3d7edf2471228ed9f7f995a599a2) }
+Peer ID: PeerId("12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ")
+Node external addresses [/ip4/192.168.1.11/tcp/3102]
+
+thread 'tokio-runtime-worker' panicked at /home/zohan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/warp-0.3.7/src/server.rs:217:27:
+error binding to 0.0.0.0:9002: error creating server listener: Address already in use (os error 98)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Now listening on /ip4/192.168.1.11/tcp/3102/p2p/12D3KooWPhZ2iXF7u53nTYas2wNVMHjgC8oz9bASAhgrMBnG8EYZ
+Error: JoinError::Panic(Id(18), "error binding to 0.0.0.0:9002: error creating server listener: Address already in use (os error 98)", ...)

@@ -84,43 +84,43 @@ impl Api {
         let sender = self.sender.clone();
 
         let routes =
-            Self::post("sendTx", sender.clone(), |input: SendTxInput, respond_to| {
+            Self::post("send-tx", sender.clone(), |input: SendTxInput, respond_to| {
                 ApiEvent::SendTx {contract: input.contract, function: input.function, args: input.args, data_str: input.data, respond_to }
             })
             .or(Self::post("bootstrap", sender.clone(), |input: MultiaddrInput, respond_to| {
                 ApiEvent::Bootstrap { bootstrap_addr: input.multiaddr, respond_to }
             }))
-            .or(Self::get("initDag", sender.clone(), |respond_to| {
+            .or(Self::get("init-dag", sender.clone(), |respond_to| {
                 ApiEvent::InitDag { respond_to }
             }))
-            .or(Self::post("syncDag", sender.clone(), | input: SyncDagInput, respond_to| {
+            .or(Self::post("sync-dag", sender.clone(), | input: SyncDagInput, respond_to| {
                 ApiEvent::SyncDag { peer: input.peer, respond_to }
             }))
-            .or(Self::post("getTx", sender.clone(), |input: TxIdInput, respond_to| {
+            .or(Self::post("get-tx", sender.clone(), |input: TxIdInput, respond_to| {
                 ApiEvent::GetTx { tx_id: input.tx_id, respond_to }
             }))
-            .or(Self::post("getTxs", sender.clone(), |input: TxIdsInput, respond_to| {
+            .or(Self::post("get-txs", sender.clone(), |input: TxIdsInput, respond_to| {
                 ApiEvent::GetTxs { tx_ids: input.tx_ids, respond_to }
             }))
-            .or(Self::post("getAncestry", sender.clone(), |input: GetFamilyInput, respond_to| {
+            .or(Self::post("get-ancestry", sender.clone(), |input: GetFamilyInput, respond_to| {
                 ApiEvent::GetAncestry { tx_id: input.tx_id, levels: input.levels, respond_to }
             }))
-            .or(Self::get("getPeers", sender.clone(), |respond_to| {
+            .or(Self::get("get-peers", sender.clone(), |respond_to| {
                 ApiEvent::GetPeers { respond_to }
             }))
-            .or(Self::get("getKnownAddresses", sender.clone(), |respond_to| {
+            .or(Self::get("get-known-addresses", sender.clone(), |respond_to| {
                 ApiEvent::GetKnownAddresses { respond_to }
             }))
-            .or(Self::get("selfPeerId", sender.clone(), |respond_to| {
+            .or(Self::get("self-peer-id", sender.clone(), |respond_to| {
                 ApiEvent::SelfPeerId { respond_to }
             }))
-            .or(Self::get("selfAddress", sender.clone(), | respond_to| {
+            .or(Self::get("self-addresses", sender.clone(), | respond_to| {
                 ApiEvent::SelfAddresses { respond_to }
             }))
-            .or(Self::post("dialPeer", sender.clone(), |input: DialPeerInput, respond_to| {
+            .or(Self::post("dial-peer", sender.clone(), |input: DialPeerInput, respond_to| {
                 ApiEvent::DialPeer { peer_id: input.peer_id, multiaddr: input.multiaddr, respond_to }
             }))
-            .or(Self::get("dagHeight", sender.clone(), |respond_to| {
+            .or(Self::get("dag-height", sender.clone(), |respond_to| {
                 ApiEvent::DagHeight { respond_to }
             }))
             .or(Self::get("metrics", sender.clone(), |respond_to| {

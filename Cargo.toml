@@ -3,6 +3,10 @@ name = "dag-network"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "dag-network"
+path = "src/main.rs"
+
 [dependencies]
 tokio = { version = "1.45.0", features = ["full"] }
 libp2p = { version = "0.55", features = [ "tokio", "gossipsub", "identify", "mdns", "noise", "macros", "tcp", "ping", "yamux", "quic", "kad", "dns", "rsa", "request-response", "cbor", "kad"] }

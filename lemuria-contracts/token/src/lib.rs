@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use bincode::decode_from_slice;
 
 extern "C" {
+
     fn read_state(offset_ptr: i32, key_ptr: i32, key_len: i32) -> i32;
     fn write_state(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32);
     fn write_output(ptr: i32, len: i32) -> i32;

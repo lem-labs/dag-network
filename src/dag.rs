@@ -8,6 +8,8 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 use wasmtime::{Engine, Store, Module, Instance, Linker, TypedFunc, Caller};
 use anyhow::Result;
+use std::cell::RefCell;
+
 pub enum DagEvent {
     Broadcast { txid: TxHash, tx: Transaction }
 }
@@ -269,7 +271,7 @@ impl Dag {
             Ok(merged_state_map) => {
                 let (merged_root, merged_path) = self.apply_state_diff(merged_state_map.clone());
 
-                if let (new_state_root, state_path) = self.run_contract(
+                match self.run_contract(
                     contract.clone(),
                     contract_function.clone(),
                     contract_args.clone(),
@@ -277,29 +279,35 @@ impl Dag {
                     merged_path.clone(),
                     peer_id.clone(),
                 ) {
-                    let tx = Transaction {
-                        parents,
-                        prev_state_root: merged_root, // TODO: merged state root
-                        new_state_root,
-                        contract_call: ContractCall {
-                            address: contract_address.clone(),
-                            function: contract_function.clone(),
-                            args: contract_args.clone(),
-                        },
-                        data: vec![], // TODO: if contract_args included data to upload, include here
-                        metadata: Metadata {
-                            timestamp: current_timestamp(),
-                            peer_id,
-                            signature: None,
-                            tx_version: 1,
-                            tags: vec![contract_function.clone()],
-                        },
-                    };
+                    Ok((new_state_root, state_path)) => {
+                        let data = match contract_args.clone().get("data") {
+                            Some(data) => data.clone(),
+                            None => vec![]
+                        };
 
-                    let tx_hash = self.hash_tx(&tx);
-                    Ok((tx_hash, tx, state_path))
-                } else {
-                    Err("Contract execution failed".into())
+                        let tx = Transaction {
+                            parents,
+                            prev_state_root: merged_root,
+                            new_state_root,
+                            contract_call: ContractCall {
+                                address: contract_address.clone(),
+                                function: contract_function.clone(),
+                                args: contract_args.clone(),
+                            },
+                            data,
+                            metadata: Metadata {
+                                timestamp: current_timestamp(),
+                                peer_id,
+                                signature: None,
+                                tx_version: 1,
+                                tags: vec![contract_function.clone()],
+                            },
+                        };
+
+                        let tx_hash = self.hash_tx(&tx);
+                        Ok((tx_hash, tx, state_path))
+                    }
+                    Err(e) => Err(e),
                 }
             }
             Err(e) => {
@@ -316,14 +324,13 @@ impl Dag {
         data: Vec<u8>,
         merged_state: Vec<StateNode>,
         peer_id: String,
-    ) -> (StateHash, Vec<StateNode>) {
+    ) -> Result<(StateHash, Vec<StateNode>), Box<dyn Error + Send + Sync>> {
 
         let engine = Engine::default();
         let module = match Module::from_binary(&engine, &contract.bytes) {
             Ok(m) => m,
             Err(e) => {
-                eprintln!("WASM compile error: {}", e);
-                return (StateHash([0u8; 32]), vec![]);
+                return Err(format!("WASM compile error: {}", e).into());
             }
         };
 
@@ -361,7 +368,7 @@ impl Dag {
                     -1
                 }
             }
-        ).unwrap();
+        )?;
 
         // Import: write_state(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32)
         linker.func_wrap(
@@ -384,102 +391,108 @@ impl Dag {
                     state.insert(key, val);
                 }
             }
-        ).unwrap();
+        )?;
 
-        linker.func_wrap(
-            "env", "read_tx_data",
-            {
-                let data = data.clone(); // captured from argument
-                move |mut caller: Caller<'_, ()>, ptr: i32| -> i32 {
-                    let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
-                    let len = data.len() as i32;
+        let output_buf = Arc::new(Mutex::new(None));
 
-                    if memory.write(&mut caller, ptr as usize, &data).is_ok() {
-                        len
-                    } else {
-                        -1
-                    }
+        linker.func_wrap("env", "write_output", {
+            let output_buf = Arc::clone(&output_buf);
+            move |mut caller: Caller<'_, ()>, ptr: i32, len: i32| -> i32 {
+                let memory = caller.get_export("memory").unwrap().into_memory().unwrap();
+                let mut data = vec![0u8; len as usize];
+
+                if memory.read(&mut caller, ptr as usize, &mut data).is_err() {
+                    return 0;
                 }
+
+                let result_ptr = 4096;
+                let total_len = 4 + data.len();
+                let len_bytes = (data.len() as u32).to_le_bytes();
+
+                if memory.write(&mut caller, result_ptr, &len_bytes).is_err() {
+                    return 0;
+                }
+
+                if memory.write(&mut caller, result_ptr + 4, &data).is_err() {
+                    return 0;
+                }
+
+                *output_buf.lock().unwrap() = Some((result_ptr, total_len));
+                result_ptr as i32
             }
-        ).unwrap();
+        })?;
 
 
         // Instantiate the WASM module with imported functions
         let instance = match linker.instantiate(&mut store, &module) {
             Ok(i) => i,
             Err(e) => {
-                eprintln!("WASM instantiation error: {}", e);
-                return (StateHash([0u8; 32]), vec![]);
+                return Err(format!("WASM instantiation error: {}", e).into());
             }
         };
 
         let memory = match instance.get_memory(&mut store, "memory") {
             Some(m) => m,
             None => {
-                eprintln!("Contract missing `memory` export");
-                return (StateHash([0u8; 32]), vec![]);
+                return Err("Contract missing `memory` export".into());
             }
         };
 
         let mut contract_args = contract_args.clone();
         contract_args.insert("caller".to_string(), peer_id.as_bytes().to_vec());
+        contract_args.insert("upload_data".to_string(), data.clone());
 
         // Encode arguments
         let input_bytes = match bincode::encode_to_vec(&contract_args, bincode::config::standard()) {
             Ok(b) => b,
             Err(e) => {
-                eprintln!("Arg serialization failed: {}", e);
-                return (StateHash([0u8; 32]), vec![]);
+                return Err(format!("Arg serialization failed: {}", e).into());
             }
         };
 
         let input_ptr = 0;
         if memory.write(&mut store, input_ptr, &input_bytes).is_err() {
-            eprintln!("Failed to write args to WASM memory");
-            return (StateHash([0u8; 32]), vec![]);
+            return Err("Failed to write args to WASM memory".into());
         }
 
         // Call exported contract function
         let func: TypedFunc<(i32, i32), i32> = match instance.get_typed_func(&mut store, &contract_function) {
             Ok(f) => f,
             Err(e) => {
-                eprintln!("Missing export `{}`: {}", contract_function, e);
-                return (StateHash([0u8; 32]), vec![]);
+                return Err(format!("Missing export `{}`: {}", contract_function, e).into());
             }
         };
 
-        let result_ptr = match func.call(&mut store, (input_ptr as i32, input_bytes.len() as i32)) {
-            Ok(ptr) => ptr,
+        let _ = match func.call(&mut store, (input_ptr as i32, input_bytes.len() as i32)) {
+            Ok(val) => val, // usually ignored with write_output-based contract
             Err(e) => {
-                eprintln!("Contract call failed: {}", e);
-                return (StateHash([0u8; 32]), vec![]);
+                return Err(format!("Contract call failed: {}", e).into());
             }
         };
 
-        // Read output length + payload
-        let mut len_buf = [0u8; 4];
-        if memory.read(&mut store, result_ptr as usize, &mut len_buf).is_err() {
-            eprintln!("Failed to read result length");
-            return (StateHash([0u8; 32]), vec![]);
+        let (result_ptr, total_len) = output_buf.lock().unwrap().unwrap_or((0, 0));
+        if total_len == 0 {
+            return Err("write_output was never called by the contract".into());
         }
-        let result_len = u32::from_le_bytes(len_buf) as usize;
 
-        let mut result_buf = vec![0u8; result_len];
-        if memory.read(&mut store, result_ptr as usize + 4, &mut result_buf).is_err() {
-            eprintln!("Failed to read result payload");
-            return (StateHash([0u8; 32]), vec![]);
+        let mut result_buf = vec![0u8; total_len];
+        if memory.read(&mut store, result_ptr, &mut result_buf).is_err() {
+            return Err("Failed to read result payload".into());
         }
+
+        let result_len = u32::from_le_bytes(result_buf[..4].try_into().unwrap()) as usize;
+        let result_data = &result_buf[4..4 + result_len];
+
 
         // Parse state diff from output
-        let updates: HashMap<Vec<u8>, Vec<u8>> = match bincode::decode_from_slice(&result_buf, bincode::config::standard()) {
+        let updates: HashMap<Vec<u8>, Vec<u8>> = match bincode::decode_from_slice(result_data, bincode::config::standard()) {
             Ok((v, _)) => v,
             Err(e) => {
-                eprintln!("Result deserialization failed: {}", e);
-                return (StateHash([0u8; 32]), vec![]);
+                return Err(format!("Result deserialization failed: {}", e).into());
             }
         };
 
-        self.apply_state_diff(updates)
+        Ok(self.apply_state_diff(updates))
     }
 
     fn select_parents(&mut self) -> Option<(TxHash, TxHash)> {
@@ -698,7 +711,7 @@ impl Dag {
 
         let contract: Contract = bincode::decode_from_slice::<Contract, _>(&contract_tx.data, bincode::config::standard())?.0;
 
-        let (new_root, state_path) = self.run_contract(
+        let (new_root, state_path) = match self.run_contract(
             contract,
             tx.contract_call.function.clone(),
             tx.contract_call.args.clone(),
@@ -707,8 +720,13 @@ impl Dag {
                 StateNode::Leaf { key: k.clone(), value: v.clone() }
             }).collect(),
             tx.metadata.peer_id.clone()
-        );
-        self.update_state(state_path.clone());
+        ) {
+            Ok((new_root, state_path)) => {
+                self.update_state(state_path.clone());
+                (new_root, state_path)
+            }
+            Err(e) => return Err(e)
+        };
 
         // Reconstruct state root from the returned path to confirm consistency
         let recomputed_root = self.hash_state_node(state_path.last().expect("state_path should not be empty"));
