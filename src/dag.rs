@@ -174,7 +174,6 @@ impl Dag {
                             parents.clone(), contract_address, contract.clone(), contract_function, contract_args.clone(), peer_id, retry // private_key: String,
                         ) {
                             Ok((tx_hash, mut tx_object, state_tree_path)) => {
-                                self.update_state(state_tree_path);
                                 match self.add_tx(tx_hash, tx_object.clone()) {
                                     Ok(()) => {
                                         match self.sender.send(DagEvent::Broadcast { txid: tx_hash, tx: tx_object }).await {
@@ -213,10 +212,13 @@ impl Dag {
         if self.tips_children.contains_key(&txid) {
             return Err("Transaction with ID already exists in tips_children".into());
         }
+        let expected_hash = self.hash_tx(&tx);
+        if expected_hash != txid {
+            return Err("Transaction ID does not match computed hash".into());
+        }
         /*
        TODO:
            checks before adding to local dag:
-           - tx_id = hash(tx.contents)
            - tx.parents are in the dag (and valid tips)
            - tx.timestamp <= now + drift
            - tx.state_root != 0
@@ -262,8 +264,8 @@ impl Dag {
         //   - hash contract bytecode and verify it matches hash (proof correct contract was run)
 
         match self.verify_parents(parents.clone()) {
-            Ok(()) => {
-                let (merged_root, merged_path) = self.merge_parent_states(parents.clone());
+            Ok(merged_state_map) => {
+                let (merged_root, merged_path) = self.apply_state_diff(merged_state_map.clone());
 
                 if let (new_state_root, state_path) = self.run_contract(
                     contract.clone(),
@@ -383,6 +385,13 @@ impl Dag {
             })
             .collect();
 
+        if hashes_and_nodes.is_empty() {
+            let empty = StateNode::Empty;
+            let hash = self.hash_state_node(&empty);
+            self.state_tree.insert(TxHash(hash), empty.clone());
+            return (StateHash(hash), vec![empty]);
+        }
+
         let mut state_path = Vec::new();
 
         while hashes_and_nodes.len() > 1 {
@@ -416,17 +425,27 @@ impl Dag {
     }
 
     pub fn apply_state_diff(&mut self, updates: HashMap<Vec<u8>, Vec<u8>>) -> (StateHash, Vec<StateNode>) {
-        self.build_merkle_tree(updates)
+        let (root, path) = self.build_merkle_tree(updates);
+        self.update_state(path.clone());
+        (root, path)
     }
 
-    /// Fetches all state key-value pairs from an existing root (if needed)
+
     fn collect_state_from_root(&self, root: &StateHash) -> Option<HashMap<Vec<u8>, Vec<u8>>> {
+        let root_hex = hex::encode(root.0);
+
+        if !self.state_tree.contains_key(&TxHash(root.0)) {
+            eprintln!("ERROR: State root {} not found in state tree!", root_hex);
+            return None;
+        }
+
         let mut result = HashMap::new();
         let mut stack = vec![TxHash(root.0)];
 
         while let Some(current) = stack.pop() {
-            if let Some(node) = self.state_tree.get(&current) {
-                match node {
+            let current_hex = hex::encode(current.0);
+            match self.state_tree.get(&current) {
+                Some(node) => match node {
                     StateNode::Leaf { key, value } => {
                         result.insert(key.clone(), value.clone());
                     }
@@ -434,19 +453,25 @@ impl Dag {
                         stack.push(TxHash(*left));
                         stack.push(TxHash(*right));
                     }
-                    StateNode::Empty => {}
+                    StateNode::Empty => {
+                        eprintln!("Empty node encountered at {}", current_hex);
+                    }
+                },
+                None => {
+                    eprintln!("ERROR: Missing state node with hash {}", current_hex);
                 }
             }
         }
 
         if result.is_empty() {
+            eprintln!("Final state for root {} is EMPTY", root_hex);
             None
         } else {
             Some(result)
         }
     }
 
-    fn verify_parents(&mut self, parents: Vec<TxHash>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn verify_parents(&mut self, parents: Vec<TxHash>) -> Result<HashMap<Vec<u8>, Vec<u8>>, Box<dyn Error + Send + Sync>> {
         if parents.len() != 2 {
             return Err("Exactly two parents are required".into());
         }
@@ -476,32 +501,43 @@ impl Dag {
             merged_state.entry(key).or_insert(val);
         }
 
-        // Re-run contract
-        let contract_tx = self.transactions.get(&tx1.contract_call.address)
-            .ok_or_else(|| format!("Missing contract upload tx: {:?}", tx1.contract_call.address))?;
+        match self.verify_parent_execution(tx1, merged_state.clone()) {
+            Ok(()) => {
+                match self.verify_parent_execution(tx2, merged_state.clone()) {
+                    Ok(()) => Ok(merged_state),
+                    Err(e) => Err(e)
+                }
+            }
+            Err(e) => Err(e)
+        }
+    }
 
-        let contract: Contract = bincode::decode_from_slice::<Contract, _>(
-            &contract_tx.data,
-            bincode::config::standard()
-        )?.0;
+    fn verify_parent_execution(&mut self, tx: Transaction, merged_state: HashMap<Vec<u8>, Vec<u8>>) -> Result<(), Box<dyn Error + Send + Sync>> {
+        if tx.contract_call.address.0 == [0u8; 32] {
+            return Ok(()); // system tx, skip contract validation
+        }
+        let contract_tx = self.transactions.get(&tx.contract_call.address)
+            .ok_or_else(|| format!("Missing contract upload tx: {:?}", tx.contract_call.address))?;
 
-        // simulate execution
-        let (new_root, _) = self.run_contract(
+        let contract: Contract = bincode::decode_from_slice::<Contract, _>(&contract_tx.data, bincode::config::standard())?.0;
+
+        let (new_root, state_path) = self.run_contract(
             contract,
-            tx1.contract_call.function.clone(),
-            tx1.contract_call.args.clone(),
+            tx.contract_call.function.clone(),
+            tx.contract_call.args.clone(),
             merged_state.iter().map(|(k, v)| {
                 StateNode::Leaf { key: k.clone(), value: v.clone() }
             }).collect()
         );
+        self.update_state(state_path.clone());
 
-        if new_root != tx1.new_state_root {
-            return Err("Computed new state root does not match parent tx claimed state root".into());
+        // Reconstruct state root from the returned path to confirm consistency
+        let recomputed_root = self.hash_state_node(state_path.last().expect("state_path should not be empty"));
+        if StateHash(recomputed_root) != new_root {
+            return Err("State path does not reconstruct expected state root".into());
         }
-
         Ok(())
     }
-
 
     fn merge_parent_states(&mut self, parents: Vec<TxHash>) -> (StateHash, Vec<StateNode>) {
         let mut combined = HashMap::new();
@@ -646,22 +682,24 @@ impl Dag {
         visited
     }
 
-    pub fn initialize_dag(&mut self ) {
+    pub fn initialize_dag(&mut self) {
+        println!("Initializing DAG for bootstrap node");
 
-        println!("Initializing to new dag for bootstrap node");
-
-        if (self.transactions.len() > 0) {
-            panic!("DAG already contains transactions, cannot initialize.")
+        if !self.transactions.is_empty() {
+            panic!("DAG already contains transactions, cannot initialize.");
         }
+
         // --- Layer 1: Genesis ---
         let genesis_hash = TxHash::from_string("genesis");
+        let (genesis_root, genesis_path) = self.apply_state_diff(HashMap::new());
+
         let genesis_tx = Transaction {
             parents: vec![],
             prev_state_root: StateHash([0u8; 32]),
-            new_state_root: StateHash([0u8; 32]),
+            new_state_root: genesis_root,
             contract_call: ContractCall {
                 address: TxHash([0u8; 32]),
-                function: "genesis".parse().unwrap(),
+                function: "genesis".to_string(),
                 args: HashMap::new(),
             },
             data: vec![],
@@ -675,18 +713,21 @@ impl Dag {
         };
         self.transactions.insert(genesis_hash, genesis_tx);
 
-        // --- Layer 2: 3 nodes from genesis ---
+        // --- Layer 2: From Genesis ---
         let mut layer2 = vec![];
         for i in 0..3 {
             let label = format!("l2-{}", i);
+            let updates = HashMap::from([(label.as_bytes().to_vec(), b"layer2".to_vec())]);
+            let (new_state_root, path) = self.apply_state_diff(updates);
+
             let hash = TxHash::from_string(&label);
             let tx = Transaction {
                 parents: vec![genesis_hash],
-                prev_state_root: StateHash([0u8; 32]),
-                new_state_root: StateHash([0u8; 32]),
+                prev_state_root: genesis_root,
+                new_state_root,
                 contract_call: ContractCall {
                     address: TxHash([0u8; 32]),
-                    function: "layer2".parse().unwrap(),
+                    function: "layer2".to_string(),
                     args: HashMap::new(),
                 },
                 data: vec![],
@@ -702,21 +743,28 @@ impl Dag {
             layer2.push(hash);
         }
 
-        // --- Layer 3: 4 nodes from pairs of layer 2 ---
+        // --- Layer 3: From Layer 2 ---
         let mut layer3 = vec![];
         for i in 0..4 {
             let label = format!("l3-{}", i);
+            let parent_1 = layer2[i % layer2.len()];
+            let parent_2 = layer2[(i + 1) % layer2.len()];
+
+            let (merged_root, merged_path) = self.merge_parent_states(vec![parent_1, parent_2]);
+            self.update_state(merged_path.clone());
+
+            let updates = HashMap::from([(label.as_bytes().to_vec(), b"layer3".to_vec())]);
+            let (new_state_root, path) = self.apply_state_diff(updates);
+
             let hash = TxHash::from_string(&label);
-            let parent_1 = &layer2[i % layer2.len()];
-            let parent_2 = &layer2[(i + 1) % layer2.len()];
 
             let tx = Transaction {
-                parents: vec![*parent_1, *parent_2],
-                prev_state_root: StateHash([0u8; 32]),
-                new_state_root: StateHash([0u8; 32]),
+                parents: vec![parent_1, parent_2],
+                prev_state_root: merged_root,
+                new_state_root,
                 contract_call: ContractCall {
                     address: TxHash([0u8; 32]),
-                    function: "layer3".parse().unwrap(),
+                    function: "layer3".to_string(),
                     args: HashMap::new(),
                 },
                 data: vec![],
@@ -729,23 +777,22 @@ impl Dag {
                 },
             };
             self.transactions.insert(hash, tx);
-
-            // Only add what may be real tips to the tips (above layers will be removed after new() returns)
             self.tips_children.insert(hash, HashSet::new());
-
             layer3.push(hash);
         }
 
-        // --- Layer 4: Contract uploads from valid Layer 3 parents ---
+        // --- Layer 4: Upload Contracts ---
         let system_contracts = vec![
-            ("token-upload", include_bytes!("../lemuria-contracts/target/wasm32-unknown-unknown/release/token.wasm").to_vec(), "token"),
-            ("registry-upload", include_bytes!("../lemuria-contracts/target/wasm32-unknown-unknown/release/registry.wasm").to_vec(), "contract_registry"),
+            (
+                "registry-upload",
+                include_bytes!("../lemuria-contracts/target/wasm32-unknown-unknown/release/registry.wasm").to_vec(),
+                "contract_registry"
+            ),
         ];
 
         for (label, code, tag) in system_contracts {
             let mut selected_parents = vec![];
 
-            // Find 2 layer-3 nodes with < 2 children
             for candidate in &layer3 {
                 let child_count = self.tips_children.get(candidate).map(|s| s.len()).unwrap_or(0);
                 if child_count < 2 {
@@ -757,40 +804,87 @@ impl Dag {
             }
 
             if selected_parents.len() < 2 {
-                panic!("Not enough available parents in Layer 3 with < 2 children");
+                panic!("Not enough Layer 3 nodes with <2 children");
             }
 
+            let contract = Contract {
+                bytes: code,
+                metadata: ContractMetadata {
+                    owner: hex::encode(genesis_hash.0),
+                },
+            };
+            let encoded = bincode::encode_to_vec(contract, bincode::config::standard()).unwrap();
+
+            // Dummy state update for the contract label
+            let updates = HashMap::from([(label.as_bytes().to_vec(), tag.as_bytes().to_vec())]);
+            let (merged_root, merged_path) = self.merge_parent_states(selected_parents.clone());
+            self.update_state(merged_path);
+            let (new_state_root, path) = self.apply_state_diff(updates);
+
             let hash = TxHash::from_string(label);
-            println!("Address of {} contract: {:?}", label, hex::encode(hash.0));
+            println!("Contract {} address: {:?}", label, hash);
 
             let tx = Transaction {
                 parents: selected_parents.clone(),
-                prev_state_root: StateHash([0u8; 32]),
-                new_state_root: StateHash([0u8; 32]),  // TODO: update state tree
+                prev_state_root: merged_root,
+                new_state_root,
                 contract_call: ContractCall {
                     address: TxHash([0u8; 32]),
-                    function: "l4".parse().unwrap(),
+                    function: "init".to_string(),
                     args: HashMap::new(),
                 },
-                data: code,
+                data: encoded,
                 metadata: Metadata {
-                    timestamp: 3,
+                    timestamp: current_timestamp(),
                     peer_id: "contract-uploader".into(),
                     signature: None,
                     tx_version: 1,
-                    tags: vec![label.into()],
+                    tags: vec![tag.into()],
                 },
             };
 
             self.transactions.insert(hash, tx);
             self.tips_children.insert(hash, HashSet::new());
-            // TODO: update state tree
 
             for parent in &selected_parents {
                 self.tips_children.get_mut(parent).unwrap().insert(hash);
             }
         }
+    }
 
+    pub fn print_dag(&self) {
+        println!("=== DAG Transactions ===");
+        for (txid, tx) in &self.transactions {
+            println!("Tx ID: {}", hex::encode(txid.0));
+            println!("  Parents: {:?}", tx.parents.iter().map(|p| hex::encode(p.0)).collect::<Vec<_>>());
+            println!("  Prev State Root: {}", hex::encode(tx.prev_state_root.0));
+            println!("  New State Root:  {}", hex::encode(tx.new_state_root.0));
+            println!("  Function: {}", tx.contract_call.function);
+            println!("  ---");
+        }
+    }
+
+    pub fn print_state_tree(&self) {
+        println!("=== State Tree ===");
+        for (hash, node) in &self.state_tree {
+            println!("Node Hash: {}", hex::encode(hash.0));
+            match node {
+                StateNode::Leaf { key, value } => {
+                    println!("  Type: Leaf");
+                    println!("  Key: {:?}", key);
+                    println!("  Value: {:?}", value);
+                }
+                StateNode::Branch { left, right } => {
+                    println!("  Type: Branch");
+                    println!("  Left: {}", hex::encode(left));
+                    println!("  Right: {}", hex::encode(right));
+                }
+                StateNode::Empty => {
+                    println!("  Type: Empty");
+                }
+            }
+            println!("---");
+        }
     }
 
 }

@@ -1,0 +1,5 @@
+- efficient state reuse
+- signature verification
+- wasm environment imports
+- contract registry
+- tx finalized after enough children logic,

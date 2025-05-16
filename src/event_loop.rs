@@ -1,5 +1,5 @@
 use crate::api::ApiEvent;
-use crate::dag::{Dag, DagEvent, Transaction, TransactionWithId, TxHash};
+use crate::dag::{Dag, DagEvent, StateNode, Transaction, TransactionWithId, TxHash};
 use crate::network::{DagSyncRequest, DagSyncResponse, LemuriaBehaviour, LemuriaBehaviourEvent, LemuriaRequest, LemuriaResponse};
 use bincode::error::EncodeError;
 use futures::StreamExt;
@@ -67,7 +67,7 @@ impl EventLoop {
                     // --- PING ---
                     LemuriaBehaviourEvent::Ping(ping::Event { peer, result, .. }) => {
                         match result {
-                            Ok(rtt) => println!("Ping to {}: {} ms", peer, rtt.as_millis()),
+                            Ok(rtt) => {} //println!("Ping to {}: {} ms", peer, rtt.as_millis()),
                             Err(e) => println!("Ping error with {}: {:?} ms", peer, e),
                         }
                     }
@@ -93,7 +93,6 @@ impl EventLoop {
                         match kad_event {
                             // --- INBOUND REQUEST
                             kad::Event::InboundRequest { request } => {
-                                println!("Kad REQUEST: :{:?}", request);
                                 match request {
                                     kad::InboundRequest::FindNode { num_closer_peers } => {
                                         println!("Received FindNode request. Closer peers: {}", num_closer_peers);
@@ -327,7 +326,6 @@ impl EventLoop {
                 match self.dag.add_tx(tx_with_id.id, tx.clone()) {
                     Ok(()) => {
                         println!("Transaction added to dag: {:?}", tx_with_id.id);
-                        println!("DAG Current State: {:?}", self.dag.state_tree);
                     }
                     Err(e) => eprintln!("Error adding transaction: {:?}", e)
                 }
@@ -553,7 +551,9 @@ impl EventLoop {
         let encoded_dag = bincode::encode_to_vec(&dag, bincode::config::standard()).unwrap_or_default(); // TODO: replace with proper error handling
         let tips_children = self.dag.tips_children.clone();
         let encoded_tips_children = bincode::encode_to_vec(&tips_children, bincode::config::standard()).unwrap_or_default();
-        let response = LemuriaResponse::DagSync(DagSyncResponse { dag_data: encoded_dag, tips_children_data: encoded_tips_children });
+        let state_tree = self.dag.state_tree.clone();
+        let encoded_state_tree = bincode::encode_to_vec(&state_tree, bincode::config::standard()).unwrap_or_default();
+        let response = LemuriaResponse::DagSync(DagSyncResponse { dag_data: encoded_dag, tips_children_data: encoded_tips_children, state_tree_data: encoded_state_tree });
 
         if let Err(e) = self.swarm.behaviour_mut().rr.send_response(channel, response) {
             eprintln!("Failed to send response to {:?}: {:?}", peer, e);
@@ -569,19 +569,30 @@ impl EventLoop {
 
                 match bincode::decode_from_slice::<HashMap<TxHash, HashSet<TxHash>>, _>(&resp.tips_children_data, config) {
                     Ok((received_t_c_map, _)) => {
-                        for (txid, tx) in received_tx_map {
-                            // update transactions dag
-                            if !self.dag.transactions.contains_key(&txid) {
-                                let _ = self.dag.transactions.insert(txid, tx);
+                        match bincode::decode_from_slice::<HashMap<TxHash, StateNode>, _>(&resp.state_tree_data, config) {
+                            Ok((received_state_tree_map, _)) => {
+                                for (txid, tx) in received_tx_map {
+                                    // update transactions dag
+                                    if !self.dag.transactions.contains_key(&txid) {
+                                        let _ = self.dag.transactions.insert(txid, tx);
+                                    }
+                                }
+                                // update tips -> children map
+                                for (txid, tx) in received_t_c_map {
+                                    if !self.dag.tips_children.contains_key(&txid) {
+                                        let _ = self.dag.tips_children.insert(txid, tx);
+                                    }
+                                }
+                                for (txid, state_node) in received_state_tree_map {
+                                    if !self.dag.state_tree.contains_key(&txid) {
+                                        let _ = self.dag.state_tree.insert(txid, state_node);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to decode received state tree from {:?}: {:?}", peer, e);
                             }
                         }
-                        // update tips -> children map
-                        for (txid, tx) in received_t_c_map {
-                            if !self.dag.tips_children.contains_key(&txid) {
-                                let _ = self.dag.tips_children.insert(txid, tx);
-                            }
-                        }
-                        // TODO: update state tree
                     }
                     Err(e) => {
                         eprintln!("Failed to decode received tips-children from {:?}: {:?}", peer, e);

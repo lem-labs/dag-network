@@ -133,6 +133,7 @@ pub struct DagSyncRequest { }
 pub struct DagSyncResponse {
     pub dag_data: Vec<u8>,
     pub tips_children_data: Vec<u8>,
+    pub state_tree_data: Vec<u8>
 }
 
 #[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
